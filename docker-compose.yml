@@ -25,6 +25,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - upload_data:/tmp/uploads
+      - guest_data:/tmp/guest
     networks:
       - app-network
 
@@ -35,8 +38,13 @@ services:
     env_file:
       - .env
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - upload_data:/tmp/uploads
+      - guest_data:/tmp/guest
     networks:
       - app-network
 
@@ -75,6 +83,8 @@ services:
 volumes:
   redis_data:
   postgres_data:
+  upload_data:
+  guest_data:
 
 networks:
   app-network:

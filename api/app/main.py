@@ -5,6 +5,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.database import engine
 from app.redis_client import redis_client
+from app.routers import auth, documents, quota, tasks, history
 
 app = FastAPI(title="Easy Convert AI", version="0.1.0")
 
@@ -15,6 +16,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth.router)
+app.include_router(documents.router)
+app.include_router(quota.router)
+app.include_router(tasks.router)
+app.include_router(history.router)
 
 
 @app.get("/health")

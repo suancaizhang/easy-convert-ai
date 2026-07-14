@@ -1,61 +1,73 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-interface HealthStatus {
-  status: string;
-  database: boolean;
-  redis: boolean;
-}
+import Link from "next/link";
+import { useAuth } from "@/lib/auth";
 
 export default function Home() {
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/health`)
-      .then((res) => res.json())
-      .then(setHealth)
-      .catch((err) => setError(err.message));
-  }, []);
+  const { user, loading, logout } = useAuth();
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8">
-      <h1 className="text-4xl font-bold mb-8">Easy Convert AI</h1>
-      <p className="text-lg text-gray-600 mb-8">
-        AI 驱动的文档转换平台
-      </p>
+    <main className="min-h-screen flex flex-col">
+      <nav className="border-b px-4 md:px-8 py-3 flex items-center justify-between">
+        <Link href="/" className="font-bold text-lg">
+          Easy Convert AI
+        </Link>
+        <div className="flex items-center gap-4 text-sm">
+          <Link href="/convert" className="hover:text-blue-600">
+            开始转换
+          </Link>
+          {!loading && user && (
+            <>
+              <Link href="/history" className="hover:text-blue-600">
+                转换历史
+              </Link>
+              <button onClick={logout} className="text-gray-500 hover:text-gray-700">
+                退出
+              </button>
+            </>
+          )}
+          {!loading && !user && (
+            <>
+              <Link href="/login" className="hover:text-blue-600">
+                登录
+              </Link>
+              <Link
+                href="/register"
+                className="bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700"
+              >
+                注册
+              </Link>
+            </>
+          )}
+        </div>
+      </nav>
 
-      <div className="border rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-semibold mb-4">系统状态</h2>
-        {error && (
-          <p className="text-red-500">连接失败: {error}</p>
-        )}
-        {health && (
-          <ul className="space-y-2">
-            <li className="flex justify-between">
-              <span>API</span>
-              <span className={health.status === "healthy" ? "text-green-500" : "text-yellow-500"}>
-                {health.status}
-              </span>
-            </li>
-            <li className="flex justify-between">
-              <span>Database</span>
-              <span className={health.database ? "text-green-500" : "text-red-500"}>
-                {health.database ? "connected" : "disconnected"}
-              </span>
-            </li>
-            <li className="flex justify-between">
-              <span>Redis</span>
-              <span className={health.redis ? "text-green-500" : "text-red-500"}>
-                {health.redis ? "connected" : "disconnected"}
-              </span>
-            </li>
-          </ul>
-        )}
-        {!health && !error && (
-          <p className="text-gray-400">正在检查...</p>
-        )}
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4">
+          AI 驱动的文档转换
+        </h1>
+        <p className="text-lg text-gray-600 mb-8 max-w-md">
+          支持 PDF、Word、Excel、PPT、图片互转，OCR 智能识别，快速高质量输出
+        </p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8 text-sm">
+          {["PDF ↔ Word", "Excel → PDF", "PPT → PDF", "OCR 识别"].map((t) => (
+            <div key={t} className="border rounded-md px-4 py-2 bg-gray-50">
+              {t}
+            </div>
+          ))}
+        </div>
+
+        <Link
+          href="/convert"
+          className="bg-blue-600 text-white px-8 py-3 rounded-md text-lg font-medium hover:bg-blue-700"
+        >
+          免费开始转换
+        </Link>
+
+        <p className="mt-4 text-sm text-gray-400">
+          无需注册即可体验，每日 3 次免费转换
+        </p>
       </div>
     </main>
   );
