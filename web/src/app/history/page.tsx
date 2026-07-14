@@ -16,6 +16,7 @@ interface HistoryItem {
   created_at: string;
   task_type: string | null;
   task_status: string | null;
+  task_id: string | null;
 }
 
 const TASK_TYPE_LABELS: Record<string, string> = {
@@ -26,6 +27,24 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   pdf_to_image: "PDF → 图片",
   images_to_pdf: "图片 → PDF",
   ocr_to_word: "OCR → Word",
+};
+
+const PREVIEWABLE_TYPES: Record<string, boolean> = {
+  pdf_to_word: false,
+  pdf_to_image: true,
+  word_to_pdf: true,
+  excel_to_pdf: true,
+  ppt_to_pdf: true,
+  images_to_pdf: true,
+  ocr_to_word: false,
+};
+
+const PREVIEW_LABELS: Record<string, string> = {
+  pdf_to_image: "预览图片",
+  word_to_pdf: "预览 PDF",
+  excel_to_pdf: "预览 PDF",
+  ppt_to_pdf: "预览 PDF",
+  images_to_pdf: "预览 PDF",
 };
 
 const STATUS_LABELS: Record<string, { text: string; className: string }> = {
@@ -59,6 +78,23 @@ export default function HistoryPage() {
         alert("删除失败，请重试");
       }
     }
+  };
+
+  const handlePreview = (taskId: string) => {
+    const token = localStorage.getItem("token");
+    const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8111"}/api/tasks/${taskId}/download?preview=1`;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    fetch(url, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error("预览失败");
+        return res.blob();
+      })
+      .then((blob) => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+      })
+      .catch(() => alert("预览失败"));
   };
 
   useEffect(() => {
@@ -141,6 +177,21 @@ export default function HistoryPage() {
                         {STATUS_LABELS[item.task_status].text}
                       </span>
                     )}
+                    {item.task_type &&
+                      PREVIEWABLE_TYPES[item.task_type] &&
+                      item.task_id &&
+                      item.task_status === "success" && (
+                        <button
+                          onClick={() => handlePreview(item.task_id!)}
+                          className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50 transition-colors"
+                          title={PREVIEW_LABELS[item.task_type] || "预览"}
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                      )}
                     <button
                       onClick={() => handleDelete(item.id)}
                       className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"

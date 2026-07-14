@@ -62,6 +62,24 @@ const TASK_TO_ACCEPT_EXT: Record<string, string[]> = {
   ocr_to_word: ["png", "jpg", "jpeg", "webp"],
 };
 
+const PREVIEWABLE_TYPES: Record<string, boolean> = {
+  pdf_to_word: false,   // .docx 浏览器无法直接预览
+  pdf_to_image: true,   // 图片
+  word_to_pdf: true,    // PDF
+  excel_to_pdf: true,   // PDF
+  ppt_to_pdf: true,     // PDF
+  images_to_pdf: true,  // PDF
+  ocr_to_word: false,   // .docx 浏览器无法直接预览
+};
+
+const PREVIEW_LABELS: Record<string, string> = {
+  pdf_to_image: "预览图片",
+  word_to_pdf: "预览 PDF",
+  excel_to_pdf: "预览 PDF",
+  ppt_to_pdf: "预览 PDF",
+  images_to_pdf: "预览 PDF",
+};
+
 const TASK_LABELS: Record<string, string> = {
   pdf_to_word: "PDF 转 Word",
   pdf_to_image: "PDF 转图片",
@@ -102,6 +120,7 @@ function ConvertPageInner() {
   const [taskId, setTaskId] = useState("");
   const [error, setError] = useState("");
   const [taskStatus, setTaskStatus] = useState("");
+  const [outputTaskType, setOutputTaskType] = useState("");
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -178,6 +197,7 @@ function ConvertPageInner() {
       );
       setTaskId(task.id);
       setTaskStatus(task.status);
+      setOutputTaskType(taskType);
       startPolling(task.id);
     } catch (err) {
       setStage("error");
@@ -240,6 +260,27 @@ function ConvertPageInner() {
     pollingRef.current = setTimeout(poll, 2000);
   };
 
+  const handlePreview = () => {
+    if (!taskId || !outputTaskType) return;
+    const token = localStorage.getItem("token");
+    const url = `${
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8111"
+    }/api/tasks/${taskId}/download?preview=1`;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    // 通过 blob 创建对象 URL 打开预览，避免认证问题
+    fetch(url, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error("预览失败");
+        return res.blob();
+      })
+      .then((blob) => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+      })
+      .catch(() => setError("预览失败"));
+  };
+
   const handleDownload = async () => {
     if (!taskId) return;
     const token = localStorage.getItem("token");
@@ -278,6 +319,7 @@ function ConvertPageInner() {
     setTaskId("");
     setError("");
     setTaskStatus("");
+    setOutputTaskType("");
   };
 
   const handleDelete = async () => {
@@ -435,6 +477,14 @@ function ConvertPageInner() {
               </svg>
             </div>
             <p className="font-medium">转换完成！</p>
+            {outputTaskType && PREVIEWABLE_TYPES[outputTaskType] && (
+              <button
+                onClick={handlePreview}
+                className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700"
+              >
+                {PREVIEW_LABELS[outputTaskType] || "预览文件"}
+              </button>
+            )}
             <button
               onClick={handleDownload}
               className="w-full bg-green-600 text-white rounded-md py-3 font-medium hover:bg-green-700"

@@ -232,6 +232,24 @@ export default function MergeImagesPage() {
     pollingRef.current = setTimeout(poll, 2000);
   };
 
+  const handlePreview = () => {
+    if (!taskId) return;
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8111"}/api/tasks/${taskId}/download?preview=1`;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    fetch(url, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error("预览失败");
+        return res.blob();
+      })
+      .then((blob) => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+      })
+      .catch(() => setGlobalError("预览失败"));
+  };
+
   const handleDownload = async () => {
     if (!taskId) return;
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -423,6 +441,12 @@ export default function MergeImagesPage() {
               </svg>
             </div>
             <p className="font-medium">合并完成！</p>
+            <button
+              onClick={handlePreview}
+              className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700"
+            >
+              预览 PDF
+            </button>
             <button
               onClick={handleDownload}
               className="w-full bg-green-600 text-white rounded-md py-3 font-medium hover:bg-green-700"

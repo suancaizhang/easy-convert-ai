@@ -22,6 +22,7 @@ class HistoryItem(BaseModel):
     created_at: str
     task_type: str | None = None
     task_status: str | None = None
+    task_id: str | None = None
 
 
 class HistoryResponse(BaseModel):
@@ -88,6 +89,7 @@ def get_history(
                 created_at=doc.created_at.isoformat() if doc.created_at else "",
                 task_type=task.task_type if task else None,
                 task_status=task.status if task else None,
+                task_id=str(task.id) if task else None,
             )
         )
 

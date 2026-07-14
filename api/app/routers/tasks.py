@@ -2,7 +2,7 @@ import os
 import uuid
 
 from celery import Celery
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -240,6 +240,7 @@ def _validate_result_path(file_path: str) -> bool:
 @router.get("/{task_id}/download")
 def download_result(
     task_id: str,
+    preview: bool = Query(False),
     current_user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
@@ -265,8 +266,20 @@ def download_result(
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="结果文件已过期或不存在")
 
+    ext = file_path.rsplit(".", 1)[-1].lower()
+
+    if preview:
+        media_type_map = {
+            "pdf": "application/pdf",
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "webp": "image/webp",
+        }
+        media_type = media_type_map.get(ext, "application/octet-stream")
+        return FileResponse(file_path, media_type=media_type, headers={"Content-Disposition": "inline"})
+
     base_name = document.filename.rsplit(".", 1)[0] if document else "result"
-    ext = file_path.rsplit(".", 1)[-1]
     download_name = f"{base_name}_converted.{ext}"
 
     return FileResponse(file_path, filename=download_name)
