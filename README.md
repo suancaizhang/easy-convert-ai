@@ -8,14 +8,15 @@ AI 驱动的在线文档转换平台，支持 PDF、Word、Excel、PPT、图片�
 - **Office → PDF**: Excel、PPT 一键转 PDF（LibreOffice 引擎）
 - **PDF → 图片**: PDF 逐页渲染为 PNG（150 DPI）
 - **图片 → PDF**: 多张图片合并为 PDF
-- **OCR 识别**: PaddleOCR + DeepSeek AI 双引擎，支持中文识别
+- **OCR 识别**: PaddleOCR + 小米 MiMo v2.5 多模态 AI 双引擎，支持中文识别
+- **多图合并转 PDF**: 支持 2~20 张图片批量合并为单个 PDF，独立页面操作
 - **用户体系**: 注册登录、JWT 鉴权、游客免注册试用
 - **配额管理**: 注册用户 8 次/天，游客 3 次/天（IP 限流），自动重置
 - **异步处理**: Celery 双队列架构，Office 转换隔离，支持重试
 - **转换历史**: 分页查看历史记录，过期文件标记
-
-## 需求文档
-D:\workspace\knowledge\tasks\ai-document-platform
+- **文档删除**: 支持删除已上传/已转换文档及关联任务记录，自动清理物理文件
+- **转换预选**: 首页直达入口，通过 `?taskType=` 参数预选转换类型，跳过类型选择步骤
+- **自定义字体**: 内置自定义字体（Luo），优化文档渲染效果
 
 ## 技术栈
 
@@ -26,7 +27,7 @@ D:\workspace\knowledge\tasks\ai-document-platform
 | 任务队列 | Celery 5.4 + Redis（双队列: default / office） |
 | 数据库 | PostgreSQL 16 |
 | 转换引擎 | PyMuPDF、python-docx、LibreOffice Headless |
-| OCR | PaddleOCR + DeepSeek API（fallback） |
+| OCR | PaddleOCR + 小米 MiMo v2.5（fallback） |
 | 部署 | Docker Compose（5 容器） |
 
 ## 架构
@@ -34,7 +35,7 @@ D:\workspace\knowledge\tasks\ai-document-platform
 ```
 ┌──────────┐     ┌──────────┐     ┌───────────┐
 │  Next.js │────▶│ FastAPI  │────▶│   Redis   │
-│  :3000   │     │  :8000   │     │   :6379   │
+│  :3000   │     │  :8111   │     │   :6379   │
 └──────────┘     └────┬─────┘     └─────┬─────┘
                       │                  │
                       ▼                  ▼
@@ -50,7 +51,7 @@ D:\workspace\knowledge\tasks\ai-document-platform
 3. Worker 执行转换 → 结果写入共享卷 → 更新任务状态
 4. 前端轮询任务状态 → 完成后下载结果文件
 
-## 快速开始
+## Docker 部署
 
 ### 前置条件
 
@@ -80,42 +81,169 @@ docker compose up --build
 | API 文档 (Swagger) | http://localhost:8000/docs |
 | 健康检查 | http://localhost:8000/health |
 
-### 本地开发（前端）
+## 本地开发
+
+以下步骤适用于 **WSL2 + 原生 PostgreSQL/Redis** 环境（Windows 项目代码挂载在 WSL2 的 `/mnt/d` 下）。
+
+### 环境架构
+
+```
+Windows (D盘)                    WSL2 (Ubuntu)
+┌──────────────┐     /mnt/d     ┌──────────────────────┐
+│  项目代码    │◄──── 挂载 ────│  FastAPI (:8111)     │
+│  D:\workspace│                │  Celery Worker       │
+│  \easy-conve-│                │  PostgreSQL (:5432)  │
+│  rt-ai       │                │  Redis (:6379)       │
+└──────────────┘                └──────────────────────┘
+```
+
+> 所有命令都在 **WSL2 终端** 中执行。Windows 浏览器通过 `http://localhost:8111` 访问 API（WSL2 端口自动转发）。
+
+### 1. 环境变量配置
 
 ```bash
-cd web
+cd /mnt/d/workspace/easy-convert-ai
+
+# 复制环境变量模板
+cp .env.example .env
+```
+
+编辑 `.env`，确保内容如下（WSL2 本地部署）：
+
+```env
+# Database
+DATABASE_URL=postgresql://easyconvert:easyconvert_dev@localhost:5432/easyconvert
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# Celery
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
+
+# JWT（必填）
+JWT_SECRET=dev-secret-key-easy-convert-ai-2024
+```
+
+> ⚠️ 所有服务地址用 `localhost` 而非 `postgres`/`redis`（Docker 容器名在本地不可用）。
+> ⚠️ `JWT_SECRET` 必须设置，否则启动报错。
+> ⚠️ `.env` 中只保留 Settings 类声明的字段，多余的变量会导致 pydantic 校验失败。
+
+### 2. 启动后端 API（FastAPI）
+
+```bash
+cd /mnt/d/workspace/easy-convert-ai/api
+
+# 创建虚拟环境（首次）
+python3 -m venv .venv
+
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 运行数据库迁移
+export DATABASE_URL=postgresql://easyconvert:easyconvert_dev@localhost:5432/easyconvert
+export JWT_SECRET=dev-secret-key-easy-convert-ai-2024
+./.venv/bin/python -m alembic upgrade head
+
+# 启动 API 服务
+# --reload: 代码变更自动重载，开发时使用
+# --host 0.0.0.0: 监听所有网络接口，允许 Windows 浏览器访问
+# --port 8111: 端口号，可根据需要修改
+./.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8111
+```
+
+验证：
+- Windows 浏览器打开 `http://localhost:8111/docs` 查看 Swagger 文档
+- `http://localhost:8111/health` 返回 `{"status":"healthy"}`
+
+> 💡 如果端口冲突，修改 `--port` 参数，同时更新前端代码中的 API 地址默认值。
+
+### 3. 启动 Celery Worker
+
+```bash
+cd /mnt/d/workspace/easy-convert-ai/worker
+
+# 创建虚拟环境（首次）
+python3 -m venv .venv
+
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动 Worker（需要先启动 Redis）
+# -Q default,office: 监听两个队列，office 用于 Office 文档转换
+# --loglevel=info: 显示任务执行日志
+DATABASE_URL=postgresql://easyconvert:easyconvert_dev@localhost:5432/easyconvert \
+CELERY_BROKER_URL=redis://localhost:6379/0 \
+CELERY_RESULT_BACKEND=redis://localhost:6379/1 \
+./.venv/bin/celery -A worker.celery_app worker --loglevel=info -Q default,office
+```
+
+> ⚠️ Worker 需要以下环境变量，默认值均使用 Docker 容器名（`postgres`、`redis`），WSL2 下必须传 `localhost`：
+> - `DATABASE_URL` — 连接 PostgreSQL（Worker 直接读写数据库，非通过 API 代理）
+> - `CELERY_BROKER_URL` — 连接 Redis Broker
+> - `CELERY_RESULT_BACKEND` — 连接 Redis Result Backend
+>
+> 也可以先用 `export` 设置，后续启动不再重复传：
+> ```bash
+> export DATABASE_URL=postgresql://easyconvert:easyconvert_dev@localhost:5432/easyconvert
+> export CELERY_BROKER_URL=redis://localhost:6379/0
+> export CELERY_RESULT_BACKEND=redis://localhost:6379/1
+> ```
+> ⚠️ LibreOffice 转换（excel_to_pdf、ppt_to_pdf、word_to_pdf）需要系统安装 LibreOffice：`sudo apt install libreoffice-core`。
+
+验证：
+- 启动后看到 `celery@hostname ready` 和 `connected to redis://localhost:6379/0` 表示成功
+- 通过 API 创建转换任务后，Worker 日志会显示任务执行过程
+
+### 4. 启动前端（Next.js）
+
+```bash
+cd /mnt/d/workspace/easy-convert-ai/web
+
+# 安装依赖（首次）
 npm install
+
+# 创建环境变量文件（可选，默认使用 localhost:8111）
+echo "NEXT_PUBLIC_API_URL=http://localhost:8111" > .env.local
+
+# 启动开发服务器
 npm run dev
 ```
 
-### 本地开发（后端）
+> 前端默认连接 `http://localhost:8111`，如果 API 端口修改了，需要同步更新 `.env.local` 中的 `NEXT_PUBLIC_API_URL`。
+> 前端运行在 `http://localhost:3000`，Windows 浏览器直接访问即可。
 
-```bash
-cd api
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+### 启动顺序
 
-# 需要本地 PostgreSQL 和 Redis，或者用 docker compose 只启动基础设施
-docker compose up -d postgres redis
+正确的启动顺序：
 
-# 运行数据库迁移
-alembic upgrade head
-
-# 启动 API
-uvicorn app.main:app --reload
+```
+1. PostgreSQL ──→ 2. Redis ──→ 3. API Server ──→ 4. Worker ──→ 5. Frontend
+   (数据库)        (缓存/队列)    (FastAPI)        (转换任务)     (Next.js)
 ```
 
-### 本地开发（Worker）
+### 调试技巧
 
-```bash
-cd worker
-pip install -r requirements.txt
+**API 调试**：
+- Swagger 文档：`http://localhost:8111/docs` — 在线调试所有接口
+- 健康检查：`http://localhost:8111/health` — 查看数据库和 Redis 连接状态
+- uvicorn 以 `--reload` 模式启动，修改 Python 代码后自动重启
 
-# Worker 需要 LibreOffice（office 转换）
-# Ubuntu: apt install libreoffice-core
-celery -A worker.celery_app worker --loglevel=info -Q default,office
-```
+**Worker 调试**：
+- 增加 `--loglevel=debug` 查看更详细的任务执行日志
+- 任务进度可通过 `GET /api/tasks/{id}/status` 查询
+- 如果 Worker 无法连接 Redis，检查 Redis 是否运行：`redis-cli ping`
+
+**前端调试**：
+- Next.js 开发模式支持 HMR（热模块替换），修改代码即时生效
+- 浏览器开发者工具 Network 面板查看 API 请求和响应
+- 如果前端报 CORS 错误，检查 API 的 `allow_origins` 配置
 
 ## 环境变量
 
@@ -128,7 +256,7 @@ celery -A worker.celery_app worker --loglevel=info -Q default,office
 | `JWT_SECRET` | **必填** JWT 签名密钥 | 无默认值，不设置则启动失败 |
 | `JWT_ALGORITHM` | JWT 算法 | `HS256` |
 | `JWT_EXPIRE_MINUTES` | Token 过期时间（分钟） | `1440`（24 小时） |
-| `DEEPSEEK_API_KEY` | DeepSeek OCR API Key（可选） | 空 |
+| `MIMO_API_KEY` | 小米 MiMo 多模态 API Key（可选，用于 OCR 高精度模式） | 空 |
 | `API_DEBUG` | 调试模式 | `true` |
 
 ## API 接口
@@ -146,13 +274,15 @@ celery -A worker.celery_app worker --loglevel=info -Q default,office
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/documents/upload` | 上传文件（multipart/form-data） |
-| GET | `/api/documents/history` | 转换历史（需登录） |
+| DELETE | `/api/documents/{id}` | 删除文档及关联任务记录（登录用户/游客均可） |
+| GET | `/api/documents/history` | 转换历史（分页，需登录） |
 
 ### 任务
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/tasks/create` | 创建转换任务 |
+| POST | `/api/tasks/create` | 创建转换任务（单文档） |
+| POST | `/api/tasks/create-merge` | 创建多图合并任务（2~20 张图片合并为 PDF） |
 | GET | `/api/tasks/{id}/status` | 查询任务状态 |
 | GET | `/api/tasks/{id}/download` | 下载转换结果 |
 
@@ -181,20 +311,23 @@ easy-convert-ai/
 ├── web/                        # Next.js 前端
 │   ├── src/
 │   │   ├── app/               # 页面路由
-│   │   │   ├── convert/       # 转换页面
-│   │   │   ├── history/       # 历史记录
+│   │   │   ├── convert/       # 转换页面（支持 ?taskType 预选）
+│   │   │   ├── merge-images/  # 多图合并转 PDF（独立操作界面）
+│   │   │   ├── history/       # 历史记录（支持删除操作）
 │   │   │   ├── login/         # 登录
 │   │   │   └── register/      # 注册
 │   │   └── lib/               # 工具库 (api client, auth context)
+│   ├── public/fonts/          # 自定义字体（Luo-Regular.woff2）
+│   ├── tailwind.config.ts     # Tailwind 配置（自定义字体族）
 │   └── Dockerfile
 ├── api/                        # FastAPI 后端
 │   ├── app/
 │   │   ├── routers/           # 路由 (auth, documents, tasks, quota, history)
-│   │   ├── models.py          # SQLAlchemy 模型
-│   │   ├── config.py          # 配置
-│   │   ├── deps.py            # 依赖注入
+│   │   ├── models.py          # SQLAlchemy 模型 (User, Document, Task)
+│   │   ├── config.py          # 配置（pydantic-settings）
+│   │   ├── deps.py            # 依赖注入（get_current_user、get_optional_user）
 │   │   └── auth.py            # JWT + 密码哈希
-│   ├── alembic/               # 数据库迁移
+│   ├── alembic/               # 数据库迁移（001_create_tables）
 │   └── Dockerfile
 ├── worker/                     # Celery Worker
 │   ├── worker/
@@ -203,6 +336,8 @@ easy-convert-ai/
 │   │   ├── config.py          # 队列配置
 │   │   └── celery_app.py      # Celery 应用实例
 │   └── Dockerfile
+├── docs/                       # 架构文档 & Issue 追踪
+│   └── issues/                # 已知问题与改进方案
 ├── docker-compose.yml          # 5 容器编排
 ├── .env.example                # 环境变量模板
 └── README.md
@@ -216,12 +351,14 @@ easy-convert-ai/
 - 密码 bcrypt 哈希存储
 - 文件上传格式 + 大小双重校验（20MB 上限）
 - `JWT_SECRET` 无默认值，强制配置
+- 文档删除鉴权：登录用户只能删除自己的文档，游客文档仅游客可删
 
 ## 已知限制
 
 - 文件存储使用 Docker 共享卷，非持久化对象存储
 - 暂无登录频率限制（计划集成 slowapi）
-- OCR 依赖外部 DeepSeek API，无 key 时降级为纯 PaddleOCR
+- OCR 双引擎：normal 模式优先 PaddleOCR，失败时降级到小米 MiMo v2.5；high_accuracy 模式优先 MiMo
+- PaddleOCR 未默认安装（需要 `paddlepaddle` 和 `paddleocr` Python 包），默认 fallback 使用 MiMo API
 - 尚未实现微信 OAuth 登录
 - 无生产级监控和日志聚合
 

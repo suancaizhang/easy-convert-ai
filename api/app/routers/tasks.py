@@ -22,10 +22,18 @@ OFFICE_TYPES = {"excel_to_pdf", "ppt_to_pdf", "word_to_pdf"}
 ALLOWED_OUTPUT_PREFIXES = ["/tmp/convert_", "/tmp/uploads", "/tmp/guest"]
 
 
+ALLOWED_IMAGE_TYPES = {"png", "jpg", "jpeg", "webp"}
+
+
 class CreateTaskRequest(BaseModel):
     document_id: str
     task_type: str
     ocr_mode: str | None = None
+
+
+class CreateMergeRequest(BaseModel):
+    document_ids: list[str]
+    task_type: str = "images_to_pdf"
 
 
 class TaskResponse(BaseModel):
@@ -137,6 +145,90 @@ def get_task_status(
         error_message=task.error_message,
         error_code=task.error_code,
         result_path=None,
+    )
+
+
+@router.post("/create-merge", response_model=TaskResponse, status_code=201)
+def create_merge_task(
+    body: CreateMergeRequest,
+    request: Request,
+    current_user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    if body.task_type != "images_to_pdf":
+        raise HTTPException(status_code=400, detail="task_type 仅支持 images_to_pdf")
+
+    if not (2 <= len(body.document_ids) <= 20):
+        raise HTTPException(status_code=400, detail="图片数量必须在 2~20 张之间")
+
+    # deduplicate while preserving order
+    seen: set[str] = set()
+    unique_ids: list[str] = []
+    for doc_id in body.document_ids:
+        if doc_id not in seen:
+            seen.add(doc_id)
+            unique_ids.append(doc_id)
+
+    try:
+        doc_uuids = [uuid.UUID(d) for d in unique_ids]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="document_id 格式不合法")
+
+    documents = db.query(Document).filter(Document.id.in_(doc_uuids)).all()
+    found_ids = {str(d.id) for d in documents}
+    missing = [d for d in unique_ids if d not in found_ids]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"文档不存在: {', '.join(missing)}")
+
+    for doc in documents:
+        if current_user and doc.user_id and doc.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="无权操作此文档")
+        if doc.file_type.lower() not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"文档 {doc.filename} 格式不支持，仅允许 PNG/JPG/WebP",
+            )
+
+    if current_user:
+        if not try_consume_quota(db, current_user):
+            raise HTTPException(status_code=429, detail="今日配额已用完")
+    else:
+        from app.redis_client import redis_client
+        client_ip = request.client.host if request.client else "unknown"
+        guest_key = f"guest_quota:{client_ip}"
+        current = redis_client.get(guest_key)
+        if current and int(current) >= 3:
+            raise HTTPException(status_code=429, detail="游客每日限额 3 次，请注册获取更多次数")
+        pipe = redis_client.pipeline()
+        pipe.incr(guest_key)
+        pipe.expire(guest_key, 86400)
+        pipe.execute()
+
+    # use first document as primary document_id for compatibility
+    doc_map = {str(d.id): d for d in documents}
+    primary_doc = doc_map[unique_ids[0]]
+
+    task = Task(
+        id=uuid.uuid4(),
+        document_id=primary_doc.id,
+        task_type="images_to_pdf",
+        status="waiting",
+        source_document_ids=unique_ids,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+
+    celery_app.send_task(
+        "worker.tasks.convert_document",
+        args=[str(task.id)],
+        queue="default",
+    )
+
+    return TaskResponse(
+        id=str(task.id),
+        task_type=task.task_type,
+        status=task.status,
     )
 
 

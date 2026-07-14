@@ -60,10 +60,26 @@ def _run_conversion(self, task_id: str):
             _fail_task(db, task, f"不支持的转换类型: {task.task_type}", "ERR_001")
             return
 
-        input_path = document.oss_path
-        if not input_path or not os.path.exists(input_path):
-            _fail_task(db, task, "源文件不存在", "ERR_002")
-            return
+        if task.source_document_ids:
+            docs = (
+                db.query(Document)
+                .filter(Document.id.in_([UUID(d) for d in task.source_document_ids]))
+                .all()
+            )
+            doc_map = {str(d.id): d for d in docs}
+            paths = []
+            for doc_id in task.source_document_ids:
+                d = doc_map.get(doc_id)
+                if not d or not d.oss_path or not os.path.exists(d.oss_path):
+                    _fail_task(db, task, f"源文件不存在: {doc_id}", "ERR_002")
+                    return
+                paths.append(d.oss_path)
+            input_path = ",".join(paths)
+        else:
+            input_path = document.oss_path
+            if not input_path or not os.path.exists(input_path):
+                _fail_task(db, task, "源文件不存在", "ERR_002")
+                return
 
         output_dir = tempfile.mkdtemp(prefix="convert_")
         converter = converter_cls()

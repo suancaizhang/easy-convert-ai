@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, Suspense } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -242,7 +243,7 @@ function ConvertPageInner() {
   const handleDownload = async () => {
     if (!taskId) return;
     const token = localStorage.getItem("token");
-    const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/tasks/${taskId}/download`;
+    const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8111"}/api/tasks/${taskId}/download`;
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -315,7 +316,10 @@ function ConvertPageInner() {
     : "文档转换";
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8">
+    <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 relative">
+      <Link href="/" className="absolute top-4 left-4 text-sm text-gray-400 hover:text-blue-600">
+        ← 返回首页
+      </Link>
       <div className="w-full max-w-lg space-y-6">
         <h1 className="text-2xl font-bold text-center">{pageTitle}</h1>
 

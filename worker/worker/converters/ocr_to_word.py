@@ -25,10 +25,10 @@ class OcrToWordConverter(DocumentConverter):
 
         if ocr_mode == "high_accuracy":
             try:
-                text_content = self._deepseek_ocr(input_path)
-                actual_engine = "deepseek"
+                text_content = self._mimo_ocr(input_path)
+                actual_engine = "mimo"
             except Exception as e:
-                logger.warning(f"DeepSeek OCR failed, falling back to PaddleOCR: {e}")
+                logger.warning(f"MiMo OCR failed, falling back to PaddleOCR: {e}")
                 text_content = self._paddle_ocr(input_path)
                 actual_engine = "paddleocr"
         else:
@@ -36,9 +36,9 @@ class OcrToWordConverter(DocumentConverter):
                 text_content = self._paddle_ocr(input_path)
                 actual_engine = "paddleocr"
             except Exception as e:
-                logger.warning(f"PaddleOCR failed, falling back to DeepSeek: {e}")
-                text_content = self._deepseek_ocr(input_path)
-                actual_engine = "deepseek"
+                logger.warning(f"PaddleOCR failed, falling back to MiMo: {e}")
+                text_content = self._mimo_ocr(input_path)
+                actual_engine = "mimo"
 
         doc = Document()
         for line in text_content.split("\n"):
@@ -70,22 +70,22 @@ class OcrToWordConverter(DocumentConverter):
                 lines.append(item[1][0])
         return "\n".join(lines)
 
-    def _deepseek_ocr(self, image_path: str) -> str:
+    def _mimo_ocr(self, image_path: str) -> str:
         import base64
         import httpx
 
-        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        api_key = os.environ.get("MIMO_API_KEY", "")
         if not api_key:
-            raise RuntimeError("DEEPSEEK_API_KEY not configured")
+            raise RuntimeError("MIMO_API_KEY not configured")
 
         with open(image_path, "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode()
 
         resp = httpx.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
+            "https://token-plan-cn.xiaomimimo.com/v1/chat/completions",
+            headers={"api-key": api_key},
             json={
-                "model": "deepseek-chat",
+                "model": "mimo-v2.5",
                 "messages": [
                     {
                         "role": "user",
@@ -95,6 +95,7 @@ class OcrToWordConverter(DocumentConverter):
                         ],
                     }
                 ],
+                "max_completion_tokens": 4096,
             },
             timeout=60,
         )

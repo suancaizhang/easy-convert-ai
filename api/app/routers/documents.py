@@ -67,7 +67,7 @@ async def upload_file(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    oss_path = f"original/{current_user.id}/{stored_name}" if current_user else None
+    oss_path = file_path if current_user else None
 
     doc = Document(
         id=file_id,
