@@ -1,3 +1,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  @font-face {
+    font-family: "Luo";
+    src: url("/fonts/Luo-Regular.woff2") format("woff2");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+4E00-9FFF, U+3000-303F, U+FF00-FFEF, U+2000-206F,
+      U+2E80-2EFF, U+3400-4DBF, U+20000-2A6DF, U+F900-FAFF;
+  }
+}

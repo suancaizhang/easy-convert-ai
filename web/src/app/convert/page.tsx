@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -26,28 +26,77 @@ const TASK_TYPE_OPTIONS: Record<string, { label: string; value: string }[]> = {
   xlsx: [{ label: "Excel → PDF", value: "excel_to_pdf" }],
   pptx: [{ label: "PPT → PDF", value: "ppt_to_pdf" }],
   png: [
-    { label: "OCR 识别 → Word", value: "ocr_to_word" },
+    { label: "图片转文字(OCR 识别) → Word", value: "ocr_to_word" },
     { label: "图片 → PDF", value: "images_to_pdf" },
   ],
   jpg: [
-    { label: "OCR 识别 → Word", value: "ocr_to_word" },
+    { label: "图片转文字(OCR 识别) → Word", value: "ocr_to_word" },
     { label: "图片 → PDF", value: "images_to_pdf" },
   ],
   webp: [
-    { label: "OCR 识别 → Word", value: "ocr_to_word" },
+    { label: "图片转文字(OCR 识别) → Word", value: "ocr_to_word" },
     { label: "图片 → PDF", value: "images_to_pdf" },
   ],
 };
 
 type Stage = "upload" | "converting" | "done" | "error";
 
+const VALID_TASK_TYPES = [
+  "pdf_to_word",
+  "pdf_to_image",
+  "word_to_pdf",
+  "excel_to_pdf",
+  "ppt_to_pdf",
+  "images_to_pdf",
+  "ocr_to_word",
+] as const;
+
+const TASK_TO_ACCEPT_EXT: Record<string, string[]> = {
+  pdf_to_word: ["pdf"],
+  pdf_to_image: ["pdf"],
+  word_to_pdf: ["docx"],
+  excel_to_pdf: ["xlsx"],
+  ppt_to_pdf: ["pptx"],
+  images_to_pdf: ["png", "jpg", "jpeg", "webp"],
+  ocr_to_word: ["png", "jpg", "jpeg", "webp"],
+};
+
+const TASK_LABELS: Record<string, string> = {
+  pdf_to_word: "PDF 转 Word",
+  pdf_to_image: "PDF 转图片",
+  word_to_pdf: "Word 转 PDF",
+  excel_to_pdf: "Excel 转 PDF",
+  ppt_to_pdf: "PPT 转 PDF",
+  images_to_pdf: "图片转 PDF",
+  ocr_to_word: "图片转文字(OCR 识别) → Word",
+};
+
 export default function ConvertPage() {
+  return (
+    <Suspense>
+      <ConvertPageInner />
+    </Suspense>
+  );
+}
+
+function ConvertPageInner() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // 预选模式：从 URL 读取 taskType 参数
+  const presetTaskType = (() => {
+    const param = searchParams.get("taskType");
+    if (param && (VALID_TASK_TYPES as readonly string[]).includes(param)) {
+      return param;
+    }
+    return null;
+  })();
+
   const [stage, setStage] = useState<Stage>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [taskType, setTaskType] = useState("");
+  const [taskType, setTaskType] = useState(presetTaskType || "");
   const [documentId, setDocumentId] = useState("");
   const [taskId, setTaskId] = useState("");
   const [error, setError] = useState("");
@@ -76,14 +125,29 @@ export default function ConvertPage() {
       setError("文件大小超过 20MB 限制");
       return;
     }
+
+    const ext = getFileExt(f);
+
+    // 预选模式下校验文件类型是否匹配
+    if (presetTaskType) {
+      const allowedExts = TASK_TO_ACCEPT_EXT[presetTaskType] || [];
+      if (!allowedExts.includes(ext)) {
+        setError(`当前模式仅支持 ${allowedExts.map(e => `.${e}`).join("、")} 格式的文件`);
+        return;
+      }
+    }
+
     setFile(f);
     setError("");
-    const ext = getFileExt(f);
-    const options = TASK_TYPE_OPTIONS[ext];
-    if (options && options.length === 1) {
-      setTaskType(options[0].value);
-    } else {
-      setTaskType("");
+
+    // 预选模式下 taskType 已锁定，不覆盖
+    if (!presetTaskType) {
+      const options = TASK_TYPE_OPTIONS[ext];
+      if (options && options.length === 1) {
+        setTaskType(options[0].value);
+      } else {
+        setTaskType("");
+      }
     }
   };
 
@@ -215,13 +279,45 @@ export default function ConvertPage() {
     setTaskStatus("");
   };
 
+  const handleDelete = async () => {
+    if (!documentId) return;
+    if (!confirm("确定要删除此文件吗？删除后无法恢复。")) return;
+
+    try {
+      await api.delete(`/api/documents/${documentId}`);
+      handleReset();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("删除失败，请重试");
+      }
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setFile(null);
+    setTaskType("");
+    setError("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const ext = file ? getFileExt(file) : "";
   const options = ext ? TASK_TYPE_OPTIONS[ext] || [] : [];
+
+  // 预选模式下的 accept 过滤
+  const acceptFilter = presetTaskType
+    ? (TASK_TO_ACCEPT_EXT[presetTaskType] || []).map((e) => `.${e}`).join(",")
+    : ".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp";
+
+  const pageTitle = presetTaskType
+    ? TASK_LABELS[presetTaskType] || "文档转换"
+    : "文档转换";
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8">
       <div className="w-full max-w-lg space-y-6">
-        <h1 className="text-2xl font-bold text-center">文档转换</h1>
+        <h1 className="text-2xl font-bold text-center">{pageTitle}</h1>
 
         {stage === "upload" && (
           <>
@@ -235,14 +331,25 @@ export default function ConvertPage() {
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp"
+                accept={acceptFilter}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) handleFileSelect(f);
                 }}
               />
               {file ? (
-                <div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveFile();
+                    }}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-gray-200 hover:bg-red-100 text-gray-500 hover:text-red-500 rounded-full flex items-center justify-center text-sm"
+                    title="移除文件"
+                  >
+                    ×
+                  </button>
                   <p className="font-medium">{file.name}</p>
                   <p className="text-sm text-gray-500 mt-1">
                     {(file.size / 1024 / 1024).toFixed(2)} MB
@@ -252,13 +359,15 @@ export default function ConvertPage() {
                 <div>
                   <p className="text-gray-500">拖拽文件到此处，或点击选择文件</p>
                   <p className="text-xs text-gray-400 mt-2">
-                    支持 PDF、Word、Excel、PPT、PNG、JPG、WebP（最大 20MB）
+                    {presetTaskType
+                      ? `支持 ${(TASK_TO_ACCEPT_EXT[presetTaskType] || []).map(e => e.toUpperCase()).join("、")} 格式（最大 20MB）`
+                      : "支持 PDF、Word、Excel、PPT、PNG、JPG、WebP（最大 20MB）"}
                   </p>
                 </div>
               )}
             </div>
 
-            {file && options.length > 1 && (
+            {file && !presetTaskType && options.length > 1 && (
               <div>
                 <label className="block text-sm font-medium mb-2">选择转换类型</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -276,6 +385,15 @@ export default function ConvertPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {file && !presetTaskType && options.length === 1 && (
+              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-md px-3 py-2">
+                <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>转换类型：<span className="font-medium text-gray-800">{options[0].label}</span></span>
               </div>
             )}
 
@@ -325,6 +443,12 @@ export default function ConvertPage() {
             >
               继续转换
             </button>
+            <button
+              onClick={handleDelete}
+              className="w-full border border-red-200 text-red-500 rounded-md py-3 text-sm hover:bg-red-50"
+            >
+              删除文件
+            </button>
           </div>
         )}
 
@@ -342,6 +466,14 @@ export default function ConvertPage() {
             >
               重试
             </button>
+            {documentId && (
+              <button
+                onClick={handleDelete}
+                className="w-full border border-red-200 text-red-500 rounded-md py-3 text-sm hover:bg-red-50"
+              >
+                删除文件
+              </button>
+            )}
           </div>
         )}
 

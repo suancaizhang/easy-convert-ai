@@ -14,6 +14,9 @@ AI 驱动的在线文档转换平台，支持 PDF、Word、Excel、PPT、图片�
 - **异步处理**: Celery 双队列架构，Office 转换隔离，支持重试
 - **转换历史**: 分页查看历史记录，过期文件标记
 
+## 需求文档
+D:\workspace\knowledge\tasks\ai-document-platform
+
 ## 技术栈
 
 | 层 | 技术 |

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 interface HistoryItem {
@@ -42,6 +42,24 @@ export default function HistoryPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [fetching, setFetching] = useState(true);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("确定要删除此记录吗？删除后无法恢复。")) return;
+
+    try {
+      await api.delete(`/api/documents/${id}`);
+      // Optimistic delete：先从列表移除
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      setTotal((prev) => prev - 1);
+    } catch (err) {
+      // 删除失败时重新加载列表
+      if (err instanceof ApiError) {
+        alert(err.message);
+      } else {
+        alert("删除失败，请重试");
+      }
+    }
+  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -123,6 +141,15 @@ export default function HistoryPage() {
                         {STATUS_LABELS[item.task_status].text}
                       </span>
                     )}
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"
+                      title="删除"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               </div>

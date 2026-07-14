@@ -47,14 +47,26 @@ export default function Home() {
           AI 驱动的文档转换
         </h1>
         <p className="text-lg text-gray-600 mb-8 max-w-md">
-          支持 PDF、Word、Excel、PPT、图片互转，OCR 智能识别，快速高质量输出
+          支持 PDF、Word、Excel、PPT、图片互转，图片文字提取(OCR 识别)，快速高质量输出
         </p>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8 text-sm">
-          {["PDF ↔ Word", "Excel → PDF", "PPT → PDF", "OCR 识别"].map((t) => (
-            <div key={t} className="border rounded-md px-4 py-2 bg-gray-50">
-              {t}
-            </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8 text-sm">
+          {[
+            { label: "PDF → Word", taskType: "pdf_to_word", icon: "📄" },
+            { label: "Word → PDF", taskType: "word_to_pdf", icon: "📝" },
+            { label: "图片 → PDF", taskType: "images_to_pdf", icon: "🖼" },
+            { label: "图片转文字(OCR 识别)", taskType: "ocr_to_word", icon: "🤖" },
+            { label: "Excel → PDF", taskType: "excel_to_pdf", icon: "📊" },
+            { label: "PPT → PDF", taskType: "ppt_to_pdf", icon: "📽" },
+          ].map((link) => (
+            <Link
+              key={link.taskType}
+              href={`/convert?taskType=${link.taskType}`}
+              className="border rounded-md px-4 py-3 bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-colors text-center block"
+            >
+              <span className="text-lg mr-1">{link.icon}</span>
+              {link.label}
+            </Link>
           ))}
         </div>
 

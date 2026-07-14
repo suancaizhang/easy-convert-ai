@@ -2,13 +2,13 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user, get_optional_user
-from app.models import User, Document
+from app.models import User, Document, Task
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -91,3 +91,50 @@ async def upload_file(
         file_size=doc.file_size,
         status=doc.status,
     )
+
+
+@router.delete("/{document_id}", status_code=204)
+def delete_document(
+    document_id: uuid.UUID,
+    current_user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """删除文档及其关联的任务记录和物理文件"""
+    doc = db.query(Document).filter(Document.id == document_id).first()
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+
+    # 鉴权：登录用户只能删除自己的文档；游客上传的文档(user_id=None)仅允许游客删除
+    if doc.user_id is not None:
+        if current_user is None or current_user.id != doc.user_id:
+            raise HTTPException(status_code=404, detail="文档不存在")
+    else:
+        # 游客文档：已登录用户不能删除游客文档
+        if current_user is not None:
+            raise HTTPException(status_code=404, detail="文档不存在")
+
+    # 收集需要清理的物理文件路径
+    files_to_remove: list[str] = []
+    if doc.oss_path:
+        files_to_remove.append(doc.oss_path)
+
+    tasks = db.query(Task).filter(Task.document_id == document_id).all()
+    for task in tasks:
+        if task.result_path:
+            files_to_remove.append(task.result_path)
+
+    # 级联删除关联任务，再删除文档
+    db.query(Task).filter(Task.document_id == document_id).delete()
+    db.delete(doc)
+    db.commit()
+
+    # 清理物理文件（不阻塞接口，失败不回滚）
+    for path in files_to_remove:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass
+
+    return Response(status_code=204)
