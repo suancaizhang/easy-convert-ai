@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import tempfile
 from uuid import UUID
 
@@ -37,14 +38,9 @@ ERROR_CODES = {
 }
 
 
-@app.task(
-    name="worker.tasks.convert_document",
-    bind=True,
-    max_retries=3,
-    acks_late=True,
-)
-def convert_document(self, task_id: str):
+def _run_conversion(self, task_id: str):
     db = SessionLocal()
+    output_dir = None
     try:
         task = db.query(Task).filter(Task.id == UUID(task_id)).first()
         if not task:
@@ -98,6 +94,7 @@ def convert_document(self, task_id: str):
 
         task.status = "success"
         db.commit()
+        output_dir = None
 
     except self.MaxRetriesExceededError:
         task = db.query(Task).filter(Task.id == UUID(task_id)).first()
@@ -112,6 +109,18 @@ def convert_document(self, task_id: str):
             _refund_quota(db, task)
     finally:
         db.close()
+        if output_dir and os.path.exists(output_dir):
+            shutil.rmtree(output_dir, ignore_errors=True)
+
+
+@app.task(
+    name="worker.tasks.convert_document",
+    bind=True,
+    max_retries=3,
+    acks_late=True,
+)
+def convert_document(self, task_id: str):
+    _run_conversion(self, task_id)
 
 
 @app.task(
@@ -121,7 +130,7 @@ def convert_document(self, task_id: str):
     acks_late=True,
 )
 def convert_document_office(self, task_id: str):
-    convert_document(task_id)
+    _run_conversion(self, task_id)
 
 
 def _fail_task(db, task: Task, message: str, error_code: str):

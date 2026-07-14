@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://redis:6379/1"
     debug: bool = True
 
-    jwt_secret: str = "dev-secret-change-in-production"
+    jwt_secret: str
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440  # 24 hours
 

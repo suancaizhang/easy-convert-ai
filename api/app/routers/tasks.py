@@ -2,7 +2,7 @@ import os
 import uuid
 
 from celery import Celery
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -18,6 +18,8 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 celery_app = Celery(broker=settings.celery_broker_url)
 
 OFFICE_TYPES = {"excel_to_pdf", "ppt_to_pdf", "word_to_pdf"}
+
+ALLOWED_OUTPUT_PREFIXES = ["/tmp/convert_", "/tmp/uploads", "/tmp/guest"]
 
 
 class CreateTaskRequest(BaseModel):
@@ -46,6 +48,7 @@ class TaskStatusResponse(BaseModel):
 @router.post("/create", response_model=TaskResponse, status_code=201)
 def create_task(
     body: CreateTaskRequest,
+    request: Request,
     current_user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
@@ -69,6 +72,17 @@ def create_task(
     if current_user:
         if not try_consume_quota(db, current_user):
             raise HTTPException(status_code=429, detail="今日配额已用完")
+    else:
+        from app.redis_client import redis_client
+        client_ip = request.client.host if request.client else "unknown"
+        guest_key = f"guest_quota:{client_ip}"
+        current = redis_client.get(guest_key)
+        if current and int(current) >= 3:
+            raise HTTPException(status_code=429, detail="游客每日限额 3 次，请注册获取更多次数")
+        pipe = redis_client.pipeline()
+        pipe.incr(guest_key)
+        pipe.expire(guest_key, 86400)
+        pipe.execute()
 
     task = Task(
         id=uuid.uuid4(),
@@ -102,25 +116,50 @@ def create_task(
 
 
 @router.get("/{task_id}/status", response_model=TaskStatusResponse)
-def get_task_status(task_id: str, db: Session = Depends(get_db)):
+def get_task_status(
+    task_id: str,
+    current_user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
     task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
+
+    document = db.query(Document).filter(Document.id == task.document_id).first()
+    if document and document.user_id and current_user:
+        if document.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="无权查看此任务")
+
     return TaskStatusResponse(
         id=str(task.id),
         status=task.status,
         task_type=task.task_type,
         error_message=task.error_message,
         error_code=task.error_code,
-        result_path=task.result_path if task.status == "success" else None,
+        result_path=None,
     )
 
 
+def _validate_result_path(file_path: str) -> bool:
+    real_path = os.path.realpath(file_path)
+    return any(real_path.startswith(prefix) for prefix in ALLOWED_OUTPUT_PREFIXES)
+
+
 @router.get("/{task_id}/download")
-def download_result(task_id: str, db: Session = Depends(get_db)):
+def download_result(
+    task_id: str,
+    current_user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
     task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
+
+    document = db.query(Document).filter(Document.id == task.document_id).first()
+    if document and document.user_id and current_user:
+        if document.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="无权下载此文件")
+
     if task.status != "success":
         raise HTTPException(status_code=400, detail="任务尚未完成")
     if not task.result_path:
@@ -128,10 +167,12 @@ def download_result(task_id: str, db: Session = Depends(get_db)):
 
     file_path = task.result_path.split(",")[0]
 
+    if not _validate_result_path(file_path):
+        raise HTTPException(status_code=403, detail="非法文件路径")
+
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="结果文件已过期或不存在")
 
-    document = db.query(Document).filter(Document.id == task.document_id).first()
     base_name = document.filename.rsplit(".", 1)[0] if document else "result"
     ext = file_path.rsplit(".", 1)[-1]
     download_name = f"{base_name}_converted.{ext}"

@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -46,14 +47,36 @@ def get_history(
         .all()
     )
 
+    if not docs:
+        return HistoryResponse(items=[], total=total, page=page, page_size=page_size)
+
+    doc_ids = [doc.id for doc in docs]
+
+    latest_task_subq = (
+        db.query(
+            Task.document_id,
+            func.max(Task.created_at).label("max_created"),
+        )
+        .filter(Task.document_id.in_(doc_ids))
+        .group_by(Task.document_id)
+        .subquery()
+    )
+
+    latest_tasks = (
+        db.query(Task)
+        .join(
+            latest_task_subq,
+            (Task.document_id == latest_task_subq.c.document_id)
+            & (Task.created_at == latest_task_subq.c.max_created),
+        )
+        .all()
+    )
+
+    task_map = {task.document_id: task for task in latest_tasks}
+
     items = []
     for doc in docs:
-        task = (
-            db.query(Task)
-            .filter(Task.document_id == doc.id)
-            .order_by(Task.created_at.desc())
-            .first()
-        )
+        task = task_map.get(doc.id)
         items.append(
             HistoryItem(
                 id=str(doc.id),

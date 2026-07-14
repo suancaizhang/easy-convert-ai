@@ -127,6 +127,7 @@ export default function ConvertPage() {
   const startPolling = (id: string) => {
     let interval = 2000;
     let attempts = 0;
+    const MAX_ATTEMPTS = 60;
 
     const poll = async () => {
       try {
@@ -149,12 +150,24 @@ export default function ConvertPage() {
         }
 
         attempts++;
+        if (attempts >= MAX_ATTEMPTS) {
+          setStage("error");
+          setError("转换超时，请稍后在历史记录中查看结果");
+          return;
+        }
+
         if (attempts <= 5) interval = 2000;
         else if (attempts <= 10) interval = 5000;
         else interval = Math.min(interval * 1.5, 15000);
 
         pollingRef.current = setTimeout(poll, interval);
       } catch {
+        attempts++;
+        if (attempts >= MAX_ATTEMPTS) {
+          setStage("error");
+          setError("连接超时，请稍后重试");
+          return;
+        }
         pollingRef.current = setTimeout(poll, 5000);
       }
     };
@@ -162,13 +175,32 @@ export default function ConvertPage() {
     pollingRef.current = setTimeout(poll, 2000);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!taskId) return;
     const token = localStorage.getItem("token");
     const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/tasks/${taskId}/download`;
-    const a = document.createElement("a");
-    a.href = token ? `${url}?token=${token}` : url;
-    a.click();
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) throw new Error("下载失败");
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition");
+      let filename = "converted_file";
+      if (disposition) {
+        const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
+        if (match) filename = decodeURIComponent(match[1].replace(/"/g, ""));
+      }
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      setError("下载失败，请重试");
+    }
   };
 
   const handleReset = () => {

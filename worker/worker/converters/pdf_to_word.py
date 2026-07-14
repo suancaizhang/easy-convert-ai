@@ -36,12 +36,13 @@ class PdfToWordConverter(DocumentConverter):
         output_name = f"{uuid.uuid4()}.docx"
         output_path = os.path.join(output_dir, output_name)
         doc.save(output_path)
+        page_count = len(pdf)
         pdf.close()
 
         file_size = os.path.getsize(output_path)
         return ConvertResult(
             output_path=output_path,
             file_size=file_size,
-            page_count=len(pdf),
+            page_count=page_count,
             metadata={"engine": "pymupdf"},
         )
