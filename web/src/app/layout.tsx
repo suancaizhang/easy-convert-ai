@@ -15,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body className="font-sans antialiased" suppressHydrationWarning>
+      <body className="font-ui antialiased" suppressHydrationWarning>
         <I18nProvider>
           <AuthProvider>{children}</AuthProvider>
         </I18nProvider>
