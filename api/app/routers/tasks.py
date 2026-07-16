@@ -11,7 +11,7 @@ from app.config import settings
 from app.database import get_db
 from app.deps import get_optional_user
 from app.models import User, Document, Task
-from app.routers.quota import try_consume_quota
+from app.routers.quota import consume_quota
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -29,6 +29,7 @@ class CreateTaskRequest(BaseModel):
     document_id: str
     task_type: str
     ocr_mode: str | None = None
+    params: dict | None = None
 
 
 class CreateMergeRequest(BaseModel):
@@ -77,26 +78,14 @@ def create_task(
         if active:
             raise HTTPException(status_code=429, detail="当前有正在进行的任务，请等待完成")
 
-    if current_user:
-        if not try_consume_quota(db, current_user):
-            raise HTTPException(status_code=429, detail="今日配额已用完")
-    else:
-        from app.redis_client import redis_client
-        client_ip = request.client.host if request.client else "unknown"
-        guest_key = f"guest_quota:{client_ip}"
-        current = redis_client.get(guest_key)
-        if current and int(current) >= 3:
-            raise HTTPException(status_code=429, detail="游客每日限额 3 次，请注册获取更多次数")
-        pipe = redis_client.pipeline()
-        pipe.incr(guest_key)
-        pipe.expire(guest_key, 86400)
-        pipe.execute()
+    consume_quota(db, current_user, request)
 
     task = Task(
         id=uuid.uuid4(),
         document_id=document.id,
         task_type=body.task_type,
         ocr_mode=body.ocr_mode,
+        params=body.params,
         status="waiting",
     )
     db.add(task)
@@ -189,20 +178,7 @@ def create_merge_task(
                 detail=f"文档 {doc.filename} 格式不支持，仅允许 PNG/JPG/WebP",
             )
 
-    if current_user:
-        if not try_consume_quota(db, current_user):
-            raise HTTPException(status_code=429, detail="今日配额已用完")
-    else:
-        from app.redis_client import redis_client
-        client_ip = request.client.host if request.client else "unknown"
-        guest_key = f"guest_quota:{client_ip}"
-        current = redis_client.get(guest_key)
-        if current and int(current) >= 3:
-            raise HTTPException(status_code=429, detail="游客每日限额 3 次，请注册获取更多次数")
-        pipe = redis_client.pipeline()
-        pipe.incr(guest_key)
-        pipe.expire(guest_key, 86400)
-        pipe.execute()
+    consume_quota(db, current_user, request)
 
     # use first document as primary document_id for compatibility
     doc_map = {str(d.id): d for d in documents}
