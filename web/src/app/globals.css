@@ -12,4 +12,79 @@
     unicode-range: U+4E00-9FFF, U+3000-303F, U+FF00-FFEF, U+2000-206F,
       U+2E80-2EFF, U+3400-4DBF, U+20000-2A6DF, U+F900-FAFF;
   }
+
+  :root {
+    /* 表面层级 */
+    --surface-page: #f5f4ed;
+    --surface-card: #faf9f5;
+    --surface-dark: #30302e;
+
+    /* 文字层级 */
+    --text-primary: #141413;
+    --text-secondary: #3d3d3a;
+    --text-tertiary: #504e49;
+    --text-muted: #6b6a64;
+    --text-on-brand: #ffffff;
+
+    /* 品牌 */
+    --brand: #1B365D;
+    --brand-hover: #152b4d;
+    --brand-light: #2D5A8A;
+    --brand-surface: #E4ECF5;
+
+    /* 边框 */
+    --border: #e8e6dc;
+    --border-soft: #e5e3d8;
+
+    /* 功能色 */
+    --success-bg: #e8f0e4;
+    --success-fg: #3d6b35;
+    --error-bg: #f0e0d8;
+    --error-fg: #8b4513;
+    --warning-bg: #f5ecd8;
+    --warning-fg: #7a5c1e;
+
+    /* 圆角 */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+
+    /* 字体栈 */
+    --font-serif-zh: "Luo", "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+    --font-serif-en: Charter, Georgia, Palatino, "Times New Roman", serif;
+    --font-serif-sea: Charter, Georgia, -apple-system, "Segoe UI", sans-serif;
+    --font-ui: Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace;
+
+    /* 默认内容字体（中文） */
+    --font-content: var(--font-serif-zh);
+  }
+
+  /* 按语言切换内容字体 */
+  html[lang="zh-CN"] { --font-content: var(--font-serif-zh); }
+  html[lang="en"]    { --font-content: var(--font-serif-en); }
+  html[lang="th"],
+  html[lang="vi"],
+  html[lang="id"],
+  html[lang="ms"],
+  html[lang="fil"]   { --font-content: var(--font-serif-sea); }
+
+  /* 排版微调 */
+  html[lang="zh-CN"] {
+    letter-spacing: 0.02em;
+    line-height: 1.6;
+  }
+
+  html[lang="en"] {
+    letter-spacing: 0;
+    line-height: 1.55;
+  }
+
+  body {
+    background-color: var(--surface-page);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
