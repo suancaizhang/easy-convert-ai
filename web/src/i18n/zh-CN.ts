@@ -21,6 +21,28 @@ const zhCN: TranslationKeys = {
   "home.ocrToWord": "图片转文字",
   "home.excelToPdf": "Excel → PDF",
   "home.pptToPdf": "PPT → PDF",
+  "home.pdfToImage": "PDF → 图片",
+  // home group titles
+  "home.groupConvert": "格式转换",
+  "home.groupPdfTools": "PDF 工具箱",
+  // home card descriptions
+  "home.pdfToWord.desc": "将 PDF 转为可编辑的 Word 文档",
+  "home.wordToPdf.desc": "将 Word 文档转为 PDF 格式",
+  "home.excelToPdf.desc": "将 Excel 表格转为 PDF 格式",
+  "home.pptToPdf.desc": "将 PPT 演示文稿转为 PDF",
+  "home.pdfToImage.desc": "将 PDF 每页转为图片",
+  "home.imagesToPdf.desc": "将图片合并为 PDF 文件",
+  "home.ocrToWord.desc": "识别图片/PDF 中的文字内容",
+  "home.mergePdf": "合并 PDF",
+  "home.mergePdf.desc": "将多个 PDF 合并为一个文件",
+  "home.splitPdf": "拆分 PDF",
+  "home.splitPdf.desc": "按页码范围拆分 PDF 文件",
+  "home.compressPdf": "压缩 PDF",
+  "home.compressPdf.desc": "减小 PDF 文件体积",
+  "home.rotatePdf": "旋转 PDF",
+  "home.rotatePdf.desc": "旋转 PDF 页面方向",
+  "home.watermarkPdf": "添加水印",
+  "home.watermarkPdf.desc": "为 PDF 添加文字水印",
 
   // convert
   "convert.title": "文档转换",

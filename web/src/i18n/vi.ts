@@ -21,6 +21,28 @@ const vi: TranslationKeys = {
   "home.ocrToWord": "Ảnh thành văn bản",
   "home.excelToPdf": "Excel → PDF",
   "home.pptToPdf": "PPT → PDF",
+  "home.pdfToImage": "PDF → Hình ảnh",
+  // home group titles
+  "home.groupConvert": "Chuyển đổi định dạng", // TODO: native speaker review
+  "home.groupPdfTools": "Công cụ PDF", // TODO: native speaker review
+  // home card descriptions
+  "home.pdfToWord.desc": "Chuyển PDF thành tài liệu Word có thể chỉnh sửa", // TODO: native speaker review
+  "home.wordToPdf.desc": "Chuyển tài liệu Word thành PDF", // TODO: native speaker review
+  "home.excelToPdf.desc": "Chuyển bảng tính Excel thành PDF", // TODO: native speaker review
+  "home.pptToPdf.desc": "Chuyển bản trình bày PowerPoint thành PDF", // TODO: native speaker review
+  "home.pdfToImage.desc": "Chuyển từng trang PDF thành hình ảnh", // TODO: native speaker review
+  "home.imagesToPdf.desc": "Kết hợp hình ảnh thành file PDF", // TODO: native speaker review
+  "home.ocrToWord.desc": "Trích xuất văn bản từ hình ảnh hoặc PDF", // TODO: native speaker review
+  "home.mergePdf": "Gộp PDF", // TODO: native speaker review
+  "home.mergePdf.desc": "Kết hợp nhiều PDF thành một file", // TODO: native speaker review
+  "home.splitPdf": "Tách PDF", // TODO: native speaker review
+  "home.splitPdf.desc": "Tách PDF theo phạm vi trang", // TODO: native speaker review
+  "home.compressPdf": "Nén PDF", // TODO: native speaker review
+  "home.compressPdf.desc": "Giảm kích thước file PDF", // TODO: native speaker review
+  "home.rotatePdf": "Xoay PDF", // TODO: native speaker review
+  "home.rotatePdf.desc": "Xoay hướng trang PDF", // TODO: native speaker review
+  "home.watermarkPdf": "Thêm hình mờ", // TODO: native speaker review
+  "home.watermarkPdf.desc": "Thêm hình mờ văn bản vào PDF", // TODO: native speaker review
 
   // convert
   "convert.title": "Chuyển đổi tài liệu",

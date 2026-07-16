@@ -21,6 +21,28 @@ const th: TranslationKeys = {
   "home.ocrToWord": "รูปเป็นข้อความ",
   "home.excelToPdf": "Excel → PDF",
   "home.pptToPdf": "PPT → PDF",
+  "home.pdfToImage": "PDF → รูปภาพ",
+  // home group titles
+  "home.groupConvert": "แปลงรูปแบบ", // TODO: native speaker review
+  "home.groupPdfTools": "เครื่องมือ PDF", // TODO: native speaker review
+  // home card descriptions
+  "home.pdfToWord.desc": "แปลง PDF เป็นเอกสาร Word ที่แก้ไขได้", // TODO: native speaker review
+  "home.wordToPdf.desc": "แปลงเอกสาร Word เป็น PDF", // TODO: native speaker review
+  "home.excelToPdf.desc": "แปลงสเปรดชีต Excel เป็น PDF", // TODO: native speaker review
+  "home.pptToPdf.desc": "แปลงงานนำเสนอ PowerPoint เป็น PDF", // TODO: native speaker review
+  "home.pdfToImage.desc": "แปลงแต่ละหน้า PDF เป็นรูปภาพ", // TODO: native speaker review
+  "home.imagesToPdf.desc": "รวมรูปภาพเป็นไฟล์ PDF", // TODO: native speaker review
+  "home.ocrToWord.desc": "ดึงข้อความจากรูปภาพหรือ PDF", // TODO: native speaker review
+  "home.mergePdf": "รวม PDF", // TODO: native speaker review
+  "home.mergePdf.desc": "รวม PDF หลายไฟล์เป็นไฟล์เดียว", // TODO: native speaker review
+  "home.splitPdf": "แยก PDF", // TODO: native speaker review
+  "home.splitPdf.desc": "แยก PDF ตามช่วงหน้า", // TODO: native speaker review
+  "home.compressPdf": "บีบอัด PDF", // TODO: native speaker review
+  "home.compressPdf.desc": "ลดขนาดไฟล์ PDF", // TODO: native speaker review
+  "home.rotatePdf": "หมุน PDF", // TODO: native speaker review
+  "home.rotatePdf.desc": "หมุนทิศทางหน้า PDF", // TODO: native speaker review
+  "home.watermarkPdf": "เพิ่มลายน้ำ", // TODO: native speaker review
+  "home.watermarkPdf.desc": "เพิ่มลายน้ำข้อความใน PDF", // TODO: native speaker review
 
   // convert
   "convert.title": "แปลงเอกสาร",

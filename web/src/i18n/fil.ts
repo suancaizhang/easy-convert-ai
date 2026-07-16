@@ -21,6 +21,28 @@ const fil: TranslationKeys = {
   "home.ocrToWord": "Larawan sa text",
   "home.excelToPdf": "Excel → PDF",
   "home.pptToPdf": "PPT → PDF",
+  "home.pdfToImage": "PDF → Larawan",
+  // home group titles
+  "home.groupConvert": "Conversion ng Format", // TODO: native speaker review
+  "home.groupPdfTools": "PDF Toolkit", // TODO: native speaker review
+  // home card descriptions
+  "home.pdfToWord.desc": "I-convert ang PDF sa nae-edit na Word document", // TODO: native speaker review
+  "home.wordToPdf.desc": "I-convert ang Word document sa PDF", // TODO: native speaker review
+  "home.excelToPdf.desc": "I-convert ang Excel spreadsheet sa PDF", // TODO: native speaker review
+  "home.pptToPdf.desc": "I-convert ang PowerPoint presentation sa PDF", // TODO: native speaker review
+  "home.pdfToImage.desc": "I-convert ang bawat pahina ng PDF sa larawan", // TODO: native speaker review
+  "home.imagesToPdf.desc": "Pagsamahin ang mga larawan sa isang PDF", // TODO: native speaker review
+  "home.ocrToWord.desc": "I-extract ang text mula sa mga larawan o PDF", // TODO: native speaker review
+  "home.mergePdf": "I-merge ang PDF", // TODO: native speaker review
+  "home.mergePdf.desc": "Pagsamahin ang maraming PDF sa isang file", // TODO: native speaker review
+  "home.splitPdf": "I-split ang PDF", // TODO: native speaker review
+  "home.splitPdf.desc": "I-split ang PDF ayon sa saklaw ng pahina", // TODO: native speaker review
+  "home.compressPdf": "I-compress ang PDF", // TODO: native speaker review
+  "home.compressPdf.desc": "Bawasan ang laki ng PDF file", // TODO: native speaker review
+  "home.rotatePdf": "I-rotate ang PDF", // TODO: native speaker review
+  "home.rotatePdf.desc": "I-rotate ang oryentasyon ng pahina ng PDF", // TODO: native speaker review
+  "home.watermarkPdf": "Magdagdag ng Watermark", // TODO: native speaker review
+  "home.watermarkPdf.desc": "Magdagdag ng text watermark sa PDF", // TODO: native speaker review
 
   // convert
   "convert.title": "Conversion ng Dokumento",

@@ -21,6 +21,28 @@ const en: TranslationKeys = {
   "home.ocrToWord": "Image to text",
   "home.excelToPdf": "Excel → PDF",
   "home.pptToPdf": "PPT → PDF",
+  "home.pdfToImage": "PDF → Image",
+  // home group titles
+  "home.groupConvert": "Format Conversion",
+  "home.groupPdfTools": "PDF Toolkit",
+  // home card descriptions
+  "home.pdfToWord.desc": "Convert PDF to editable Word document",
+  "home.wordToPdf.desc": "Convert Word document to PDF",
+  "home.excelToPdf.desc": "Convert Excel spreadsheet to PDF",
+  "home.pptToPdf.desc": "Convert PowerPoint presentation to PDF",
+  "home.pdfToImage.desc": "Convert each PDF page to an image",
+  "home.imagesToPdf.desc": "Combine images into a PDF file",
+  "home.ocrToWord.desc": "Extract text from images or PDFs",
+  "home.mergePdf": "Merge PDF",
+  "home.mergePdf.desc": "Combine multiple PDFs into one file",
+  "home.splitPdf": "Split PDF",
+  "home.splitPdf.desc": "Split PDF by page range",
+  "home.compressPdf": "Compress PDF",
+  "home.compressPdf.desc": "Reduce PDF file size",
+  "home.rotatePdf": "Rotate PDF",
+  "home.rotatePdf.desc": "Rotate PDF page orientation",
+  "home.watermarkPdf": "Add Watermark",
+  "home.watermarkPdf.desc": "Add text watermark to PDF",
 
   // convert
   "convert.title": "Document Conversion",

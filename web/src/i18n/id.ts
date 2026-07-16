@@ -21,6 +21,28 @@ const id: TranslationKeys = {
   "home.ocrToWord": "Gambar ke teks",
   "home.excelToPdf": "Excel → PDF",
   "home.pptToPdf": "PPT → PDF",
+  "home.pdfToImage": "PDF → Gambar",
+  // home group titles
+  "home.groupConvert": "Konversi Format", // TODO: native speaker review
+  "home.groupPdfTools": "Alat PDF", // TODO: native speaker review
+  // home card descriptions
+  "home.pdfToWord.desc": "Konversi PDF ke dokumen Word yang dapat diedit", // TODO: native speaker review
+  "home.wordToPdf.desc": "Konversi dokumen Word ke PDF", // TODO: native speaker review
+  "home.excelToPdf.desc": "Konversi spreadsheet Excel ke PDF", // TODO: native speaker review
+  "home.pptToPdf.desc": "Konversi presentasi PowerPoint ke PDF", // TODO: native speaker review
+  "home.pdfToImage.desc": "Konversi setiap halaman PDF ke gambar", // TODO: native speaker review
+  "home.imagesToPdf.desc": "Gabungkan gambar menjadi file PDF", // TODO: native speaker review
+  "home.ocrToWord.desc": "Ekstrak teks dari gambar atau PDF", // TODO: native speaker review
+  "home.mergePdf": "Gabung PDF", // TODO: native speaker review
+  "home.mergePdf.desc": "Gabungkan beberapa PDF menjadi satu file", // TODO: native speaker review
+  "home.splitPdf": "Pisah PDF", // TODO: native speaker review
+  "home.splitPdf.desc": "Pisah PDF berdasarkan rentang halaman", // TODO: native speaker review
+  "home.compressPdf": "Kompres PDF", // TODO: native speaker review
+  "home.compressPdf.desc": "Kurangi ukuran file PDF", // TODO: native speaker review
+  "home.rotatePdf": "Putar PDF", // TODO: native speaker review
+  "home.rotatePdf.desc": "Putar orientasi halaman PDF", // TODO: native speaker review
+  "home.watermarkPdf": "Tambah Tanda Air", // TODO: native speaker review
+  "home.watermarkPdf.desc": "Tambahkan tanda air teks ke PDF", // TODO: native speaker review
 
   // convert
   "convert.title": "Konversi Dokumen",

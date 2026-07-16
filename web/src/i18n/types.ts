@@ -19,6 +19,28 @@ export interface TranslationKeys {
   "home.ocrToWord": string;
   "home.excelToPdf": string;
   "home.pptToPdf": string;
+  "home.pdfToImage": string;
+  // home group titles
+  "home.groupConvert": string;
+  "home.groupPdfTools": string;
+  // home card descriptions
+  "home.pdfToWord.desc": string;
+  "home.wordToPdf.desc": string;
+  "home.excelToPdf.desc": string;
+  "home.pptToPdf.desc": string;
+  "home.pdfToImage.desc": string;
+  "home.imagesToPdf.desc": string;
+  "home.ocrToWord.desc": string;
+  "home.mergePdf": string;
+  "home.mergePdf.desc": string;
+  "home.splitPdf": string;
+  "home.splitPdf.desc": string;
+  "home.compressPdf": string;
+  "home.compressPdf.desc": string;
+  "home.rotatePdf": string;
+  "home.rotatePdf.desc": string;
+  "home.watermarkPdf": string;
+  "home.watermarkPdf.desc": string;
 
   // convert
   "convert.title": string;
