@@ -2,9 +2,32 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { useI18n, type Locale } from "@/lib/i18n";
+import type { TranslationKeys } from "@/i18n/types";
+
+const LOCALE_LABELS: Record<Locale, string> = {
+  "zh-CN": "中文",
+  en: "English",
+  id: "Bahasa Indonesia",
+  vi: "Tiếng Việt",
+  th: "ภาษาไทย",
+  fil: "Filipino",
+  ms: "Bahasa Melayu",
+};
 
 export default function Home() {
   const { user, loading, logout } = useAuth();
+  const { t, locale, setLocale } = useI18n();
+
+  const links: { label: keyof TranslationKeys; href: string; icon: string }[] = [
+    { label: "home.pdfToWord", href: "/convert?taskType=pdf_to_word", icon: "📄" },
+    { label: "home.wordToPdf", href: "/convert?taskType=word_to_pdf", icon: "📝" },
+    { label: "home.imagesToPdf", href: "/convert?taskType=images_to_pdf", icon: "🖼" },
+    { label: "home.mergeImages", href: "/merge-images", icon: "📑" },
+    { label: "home.ocrToWord", href: "/convert?taskType=ocr_to_word", icon: "🤖" },
+    { label: "home.excelToPdf", href: "/convert?taskType=excel_to_pdf", icon: "📊" },
+    { label: "home.pptToPdf", href: "/convert?taskType=ppt_to_pdf", icon: "📽" },
+  ];
 
   return (
     <main className="min-h-screen flex flex-col">
@@ -16,29 +39,37 @@ export default function Home() {
           </svg>
         </Link>
         <div className="flex items-center gap-4 text-sm">
-          <Link href="/convert" className="hover:text-blue-600">
-            开始转换
-          </Link>
+          <select
+            value={locale}
+            onChange={(e) => setLocale(e.target.value as Locale)}
+            className="border rounded px-2 py-1 text-xs bg-white cursor-pointer"
+          >
+            {(Object.keys(LOCALE_LABELS) as Locale[]).map((l) => (
+              <option key={l} value={l}>
+                {LOCALE_LABELS[l]}
+              </option>
+            ))}
+          </select>
           {!loading && user && (
             <>
               <Link href="/history" className="hover:text-blue-600">
-                转换历史
+                {t("nav.history")}
               </Link>
               <button onClick={logout} className="text-gray-500 hover:text-gray-700">
-                退出
+                {t("nav.logout")}
               </button>
             </>
           )}
           {!loading && !user && (
             <>
               <Link href="/login" className="hover:text-blue-600">
-                登录
+                {t("nav.login")}
               </Link>
               <Link
                 href="/register"
                 className="bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700"
               >
-                注册
+                {t("nav.register")}
               </Link>
             </>
           )}
@@ -47,29 +78,21 @@ export default function Home() {
 
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
         <h1 className="text-4xl md:text-5xl font-bold mb-4">
-          AI 驱动的文档转换
+          {t("home.hero")}
         </h1>
         <p className="text-lg text-gray-600 mb-8 max-w-md">
-          支持 PDF、Word、Excel、PPT、图片互转，图片文字提取(OCR 识别)，快速高质量输出
+          {t("home.subtitle")}
         </p>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8 text-sm">
-          {[
-            { label: "PDF → Word", href: "/convert?taskType=pdf_to_word", icon: "📄" },
-            { label: "Word → PDF", href: "/convert?taskType=word_to_pdf", icon: "📝" },
-            { label: "图片 → PDF", href: "/convert?taskType=images_to_pdf", icon: "🖼" },
-            { label: "多图合并PDF", href: "/merge-images", icon: "📑" },
-            { label: "图片转文字", href: "/convert?taskType=ocr_to_word", icon: "🤖" },
-            { label: "Excel → PDF", href: "/convert?taskType=excel_to_pdf", icon: "📊" },
-            { label: "PPT → PDF", href: "/convert?taskType=ppt_to_pdf", icon: "📽" },
-          ].map((link) => (
+          {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
               className="border rounded-md px-4 py-3 bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-colors text-center block"
             >
               <span className="text-lg mr-1">{link.icon}</span>
-              {link.label}
+              {t(link.label)}
             </Link>
           ))}
         </div>
@@ -78,11 +101,11 @@ export default function Home() {
           href="/convert"
           className="bg-blue-600 text-white px-8 py-3 rounded-md text-lg font-medium hover:bg-blue-700"
         >
-          开始转换
+          {t("home.cta")}
         </Link>
 
         <p className="mt-4 text-sm text-gray-400">
-          无需注册即可体验，每日 3 次免费转换
+          {t("home.freeTrialNote")}
         </p>
       </div>
     </main>

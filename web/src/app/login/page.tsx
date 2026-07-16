@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -29,7 +31,7 @@ export default function LoginPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("登录失败，请重试");
+        setError(t("login.failed"));
       }
     } finally {
       setLoading(false);
@@ -39,12 +41,12 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-4 relative">
       <Link href="/" className="absolute top-4 left-4 text-sm text-gray-400 hover:text-blue-600">
-        ← 返回首页
+        {t("nav.backHome")}
       </Link>
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold">登录</h1>
-          <p className="text-gray-500 mt-1">登录 Easy Convert AI</p>
+          <h1 className="text-2xl font-bold">{t("login.title")}</h1>
+          <p className="text-gray-500 mt-1">{t("login.subtitle")}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -56,7 +58,7 @@ export default function LoginPage() {
 
           <div>
             <label htmlFor="email" className="block text-sm font-medium mb-1">
-              邮箱
+              {t("login.email")}
             </label>
             <input
               id="email"
@@ -74,7 +76,7 @@ export default function LoginPage() {
               htmlFor="password"
               className="block text-sm font-medium mb-1"
             >
-              密码
+              {t("login.password")}
             </label>
             <input
               id="password"
@@ -84,7 +86,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="至少 6 位"
+              placeholder={t("login.passwordPlaceholder")}
             />
           </div>
 
@@ -93,14 +95,14 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full bg-blue-600 text-white rounded-md py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
           >
-            {loading ? "登录中..." : "登录"}
+            {loading ? t("login.submitting") : t("login.submit")}
           </button>
         </form>
 
         <p className="text-center text-sm text-gray-500">
-          还没有账号？{" "}
+          {t("login.noAccount")}
           <Link href="/register" className="text-blue-600 hover:underline">
-            注册
+            {t("login.register")}
           </Link>
         </p>
       </div>

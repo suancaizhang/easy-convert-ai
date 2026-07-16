@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 export default function RegisterPage() {
   const router = useRouter();
   const { login } = useAuth();
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -20,7 +22,7 @@ export default function RegisterPage() {
     setError("");
 
     if (password !== confirm) {
-      setError("两次输入的密码不一致");
+      setError(t("register.mismatch"));
       return;
     }
 
@@ -36,7 +38,7 @@ export default function RegisterPage() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("注册失败，请重试");
+        setError(t("register.failed"));
       }
     } finally {
       setLoading(false);
@@ -46,12 +48,12 @@ export default function RegisterPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-4 relative">
       <Link href="/" className="absolute top-4 left-4 text-sm text-gray-400 hover:text-blue-600">
-        ← 返回首页
+        {t("nav.backHome")}
       </Link>
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold">注册</h1>
-          <p className="text-gray-500 mt-1">创建 Easy Convert AI 账号</p>
+          <h1 className="text-2xl font-bold">{t("register.title")}</h1>
+          <p className="text-gray-500 mt-1">{t("register.subtitle")}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -63,7 +65,7 @@ export default function RegisterPage() {
 
           <div>
             <label htmlFor="email" className="block text-sm font-medium mb-1">
-              邮箱
+              {t("register.email")}
             </label>
             <input
               id="email"
@@ -81,7 +83,7 @@ export default function RegisterPage() {
               htmlFor="password"
               className="block text-sm font-medium mb-1"
             >
-              密码
+              {t("register.password")}
             </label>
             <input
               id="password"
@@ -91,7 +93,7 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="至少 6 位"
+              placeholder={t("register.passwordPlaceholder")}
             />
           </div>
 
@@ -100,7 +102,7 @@ export default function RegisterPage() {
               htmlFor="confirm"
               className="block text-sm font-medium mb-1"
             >
-              确认密码
+              {t("register.confirm")}
             </label>
             <input
               id="confirm"
@@ -110,7 +112,7 @@ export default function RegisterPage() {
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="再次输入密码"
+              placeholder={t("register.confirmPlaceholder")}
             />
           </div>
 
@@ -119,14 +121,14 @@ export default function RegisterPage() {
             disabled={loading}
             className="w-full bg-blue-600 text-white rounded-md py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
           >
-            {loading ? "注册中..." : "注册"}
+            {loading ? t("register.submitting") : t("register.submit")}
           </button>
         </form>
 
         <p className="text-center text-sm text-gray-500">
-          已有账号？{" "}
+          {t("register.hasAccount")}
           <Link href="/login" className="text-blue-600 hover:underline">
-            登录
+            {t("register.login")}
           </Link>
         </p>
       </div>

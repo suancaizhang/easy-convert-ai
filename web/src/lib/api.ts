@@ -1,3 +1,5 @@
+import { getTranslation } from "@/lib/i18n";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8111";
 
 class ApiError extends Error {
@@ -24,8 +26,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "请求失败" }));
-    throw new ApiError(body.detail || "请求失败", res.status);
+    const body = await res.json().catch(() => ({ detail: getTranslation("api.requestFailed") }));
+    throw new ApiError(body.detail || getTranslation("api.requestFailed"), res.status);
   }
 
   return res.json();
@@ -58,11 +60,11 @@ export const api = {
           resolve(JSON.parse(xhr.responseText));
         } else {
           const body = JSON.parse(xhr.responseText || "{}");
-          reject(new ApiError(body.detail || "上传失败", xhr.status));
+          reject(new ApiError(body.detail || getTranslation("api.uploadFailed"), xhr.status));
         }
       };
 
-      xhr.onerror = () => reject(new ApiError("网络错误", 0));
+      xhr.onerror = () => reject(new ApiError(getTranslation("api.networkError"), 0));
 
       const formData = new FormData();
       formData.append("file", file);

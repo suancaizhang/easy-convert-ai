@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 const MAX_IMAGES = 20;
 const MAX_SIZE = 20 * 1024 * 1024;
@@ -29,6 +30,7 @@ function generateId() {
 
 export default function MergeImagesPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [images, setImages] = useState<ImageItem[]>([]);
   const [stage, setStage] = useState<Stage>("prepare");
   const [taskId, setTaskId] = useState("");
@@ -42,17 +44,17 @@ export default function MergeImagesPage() {
     const arr = Array.from(files);
     const remaining = MAX_IMAGES - images.length;
     if (remaining <= 0) {
-      setGlobalError(`最多 ${MAX_IMAGES} 张图片`);
+      setGlobalError(t("merge.maxImages", { max: MAX_IMAGES }));
       return;
     }
     const toAdd: ImageItem[] = [];
     for (const file of arr.slice(0, remaining)) {
       if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-        setGlobalError("仅支持 PNG、JPG、WebP 格式");
+        setGlobalError(t("merge.unsupportedFormat"));
         continue;
       }
       if (file.size > MAX_SIZE) {
-        setGlobalError(`${file.name} 超过 20MB 限制`);
+        setGlobalError(t("merge.fileTooLarge", { name: file.name }));
         continue;
       }
       toAdd.push({
@@ -66,7 +68,7 @@ export default function MergeImagesPage() {
       });
     }
     if (arr.length > remaining) {
-      setGlobalError(`最多 ${MAX_IMAGES} 张，已忽略超出部分`);
+      setGlobalError(t("merge.maxExceeded", { max: MAX_IMAGES }));
     }
     setImages((prev) => [...prev, ...toAdd]);
   };
@@ -95,7 +97,6 @@ export default function MergeImagesPage() {
     );
   };
 
-  // Drag-and-drop reordering
   const handleDragStart = (index: number) => {
     dragSrcIndex.current = index;
   };
@@ -136,7 +137,7 @@ export default function MergeImagesPage() {
       );
       return doc.id;
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "上传失败";
+      const msg = err instanceof ApiError ? err.message : t("merge.uploadFailed");
       setImages((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, status: "error", error: msg } : i))
       );
@@ -146,27 +147,24 @@ export default function MergeImagesPage() {
 
   const handleMerge = async () => {
     setGlobalError("");
-    // upload all pending/error images concurrently
     const toUpload = images.filter((i) => i.status === "pending" || i.status === "error");
     if (toUpload.length > 0) {
       await Promise.all(toUpload.map(uploadSingle));
     }
 
-    // re-read latest state via functional update trick
     setImages((latest) => {
       const failed = latest.filter((i) => i.status === "error");
       if (failed.length > 0) {
-        setGlobalError(`${failed.length} 张图片上传失败，请重试后再合并`);
+        setGlobalError(t("merge.uploadFailedBatch", { count: failed.length }));
         return latest;
       }
 
       const docIds = latest.map((i) => i.documentId).filter(Boolean) as string[];
       if (docIds.length < 2) {
-        setGlobalError("至少需要 2 张图片");
+        setGlobalError(t("merge.needAtLeast2"));
         return latest;
       }
 
-      // fire merge task asynchronously
       setStage("converting");
       api
         .post<{ id: string; status: string }>("/api/tasks/create-merge", {
@@ -180,7 +178,7 @@ export default function MergeImagesPage() {
         })
         .catch((err) => {
           setStage("error");
-          setGlobalError(err instanceof ApiError ? err.message : "合并请求失败");
+          setGlobalError(err instanceof ApiError ? err.message : t("merge.mergeFailed"));
         });
 
       return latest;
@@ -205,13 +203,13 @@ export default function MergeImagesPage() {
         }
         if (res.status === "failed") {
           setStage("error");
-          setGlobalError(res.error_message || "合并失败");
+          setGlobalError(res.error_message || t("merge.mergeFailed"));
           return;
         }
         attempts++;
         if (attempts >= MAX_ATTEMPTS) {
           setStage("error");
-          setGlobalError("转换超时，请稍后在历史记录中查看");
+          setGlobalError(t("merge.timeout"));
           return;
         }
         if (attempts <= 5) interval = 2000;
@@ -222,7 +220,7 @@ export default function MergeImagesPage() {
         attempts++;
         if (attempts >= MAX_ATTEMPTS) {
           setStage("error");
-          setGlobalError("连接超时，请稍后重试");
+          setGlobalError(t("merge.connectionTimeout"));
           return;
         }
         pollingRef.current = setTimeout(poll, 5000);
@@ -240,14 +238,14 @@ export default function MergeImagesPage() {
     if (token) headers["Authorization"] = `Bearer ${token}`;
     fetch(url, { headers })
       .then((res) => {
-        if (!res.ok) throw new Error("预览失败");
+        if (!res.ok) throw new Error("preview failed");
         return res.blob();
       })
       .then((blob) => {
         const blobUrl = window.URL.createObjectURL(blob);
         window.open(blobUrl, "_blank");
       })
-      .catch(() => setGlobalError("预览失败"));
+      .catch(() => setGlobalError(t("merge.previewFailed")));
   };
 
   const handleDownload = async () => {
@@ -258,7 +256,7 @@ export default function MergeImagesPage() {
     if (token) headers["Authorization"] = `Bearer ${token}`;
     try {
       const res = await fetch(url, { headers });
-      if (!res.ok) throw new Error("下载失败");
+      if (!res.ok) throw new Error("download failed");
       const blob = await res.blob();
       const disposition = res.headers.get("content-disposition");
       let filename = "merged.pdf";
@@ -273,7 +271,7 @@ export default function MergeImagesPage() {
       a.click();
       window.URL.revokeObjectURL(blobUrl);
     } catch {
-      setGlobalError("下载失败，请重试");
+      setGlobalError(t("merge.downloadFailed"));
     }
   };
 
@@ -287,28 +285,20 @@ export default function MergeImagesPage() {
     setGlobalError("");
   };
 
-  const allDone = images.length >= 2 && images.every((i) => i.status === "done");
-  const hasError = images.some((i) => i.status === "error");
-  const canMerge =
-    images.length >= 2 &&
-    !images.some((i) => i.status === "uploading") &&
-    !hasError;
-
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 relative">
       <Link href="/" className="absolute top-4 left-4 text-sm text-gray-400 hover:text-blue-600">
-        ← 返回首页
+        {t("nav.backHome")}
       </Link>
 
       <div className="w-full max-w-2xl space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold">图片合并为 PDF</h1>
-          <p className="text-sm text-gray-500 mt-1">最多 20 张 PNG/JPG/WebP，拖拽调整顺序</p>
+          <h1 className="text-2xl font-bold">{t("merge.title")}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t("merge.subtitle")}</p>
         </div>
 
         {stage === "prepare" && (
           <>
-            {/* Drop zone */}
             <div
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
@@ -323,11 +313,10 @@ export default function MergeImagesPage() {
                 className="hidden"
                 onChange={handleFileInput}
               />
-              <p className="text-gray-500">点击或拖拽图片到此处</p>
-              <p className="text-xs text-gray-400 mt-1">PNG、JPG、WebP，每张最大 20MB</p>
+              <p className="text-gray-500">{t("merge.dropzone")}</p>
+              <p className="text-xs text-gray-400 mt-1">{t("merge.dropzoneHint")}</p>
             </div>
 
-            {/* Image grid */}
             {images.length > 0 && (
               <div className="grid grid-cols-4 gap-3">
                 {images.map((item, index) => (
@@ -346,7 +335,6 @@ export default function MergeImagesPage() {
                       className="w-full h-full object-cover"
                     />
 
-                    {/* overlay: uploading */}
                     {item.status === "uploading" && (
                       <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
                         <div className="animate-spin w-6 h-6 border-2 border-white border-t-transparent rounded-full" />
@@ -354,7 +342,6 @@ export default function MergeImagesPage() {
                       </div>
                     )}
 
-                    {/* overlay: done */}
                     {item.status === "done" && (
                       <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
                         <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -363,7 +350,6 @@ export default function MergeImagesPage() {
                       </div>
                     )}
 
-                    {/* overlay: error */}
                     {item.status === "error" && (
                       <div className="absolute inset-0 bg-red-500/70 flex flex-col items-center justify-center gap-1 p-1">
                         <span className="text-white text-xs text-center leading-tight">{item.error}</span>
@@ -371,17 +357,15 @@ export default function MergeImagesPage() {
                           onClick={(e) => { e.stopPropagation(); retryUpload(item.id); }}
                           className="text-xs bg-white text-red-600 rounded px-2 py-0.5"
                         >
-                          重试
+                          {t("merge.retry")}
                         </button>
                       </div>
                     )}
 
-                    {/* index badge */}
                     <div className="absolute top-1 left-1 w-5 h-5 bg-black/40 rounded-full flex items-center justify-center">
                       <span className="text-white text-xs">{index + 1}</span>
                     </div>
 
-                    {/* delete button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); removeImage(item.id); }}
                       className="absolute top-1 right-1 w-5 h-5 bg-black/40 hover:bg-red-500 text-white rounded-full hidden group-hover:flex items-center justify-center text-xs"
@@ -391,7 +375,6 @@ export default function MergeImagesPage() {
                   </div>
                 ))}
 
-                {/* add more slot */}
                 {images.length < MAX_IMAGES && (
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -412,14 +395,14 @@ export default function MergeImagesPage() {
               disabled={images.length < 2 || images.some((i) => i.status === "uploading")}
               className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              开始合并（{images.length} 张）
+              {t("merge.startMerge", { count: images.length })}
             </button>
 
             {!user && (
               <p className="text-center text-sm text-gray-400">
-                游客每日可免费合并 3 次，
-                <a href="/register" className="text-blue-600 hover:underline">注册</a>
-                后可获得更多次数
+                {t("merge.guestNote")}
+                <a href="/register" className="text-blue-600 hover:underline">{t("merge.guestRegister")}</a>
+                {t("merge.guestSuffix")}
               </p>
             )}
           </>
@@ -428,8 +411,8 @@ export default function MergeImagesPage() {
         {stage === "converting" && (
           <div className="text-center space-y-4 py-8">
             <div className="animate-spin w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto" />
-            <p className="text-gray-600">合并中，请稍候...</p>
-            <p className="text-sm text-gray-400">状态: {taskStatus}</p>
+            <p className="text-gray-600">{t("merge.merging")}</p>
+            <p className="text-sm text-gray-400">{t("merge.status", { status: taskStatus })}</p>
           </div>
         )}
 
@@ -440,24 +423,24 @@ export default function MergeImagesPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="font-medium">合并完成！</p>
+            <p className="font-medium">{t("merge.done")}</p>
             <button
               onClick={handlePreview}
               className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700"
             >
-              预览 PDF
+              {t("merge.previewPdf")}
             </button>
             <button
               onClick={handleDownload}
               className="w-full bg-green-600 text-white rounded-md py-3 font-medium hover:bg-green-700"
             >
-              下载 PDF
+              {t("merge.downloadPdf")}
             </button>
             <button
               onClick={handleReset}
               className="w-full border rounded-md py-3 text-sm hover:bg-gray-50"
             >
-              继续合并
+              {t("merge.continue")}
             </button>
           </div>
         )}
@@ -474,7 +457,7 @@ export default function MergeImagesPage() {
               onClick={handleReset}
               className="w-full border rounded-md py-3 text-sm hover:bg-gray-50"
             >
-              重试
+              {t("merge.retry")}
             </button>
           </div>
         )}
