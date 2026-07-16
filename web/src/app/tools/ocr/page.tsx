@@ -196,7 +196,7 @@ function OcrPageInner() {
               className={`px-3 py-2 rounded-md text-sm border transition-colors ${
                 outputFormat === fmt.value
                   ? "border-brand bg-brand-surface text-brand"
-                  : "border-gray-200 hover:border-gray-300"
+                  : "border-border hover:border-brand-light"
               }`}
             >
               {t(fmt.labelKey)}

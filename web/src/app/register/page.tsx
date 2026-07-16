@@ -47,13 +47,13 @@ export default function RegisterPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4 relative">
-      <Link href="/" className="absolute top-4 left-4 text-sm text-gray-400 hover:text-blue-600">
+      <Link href="/" className="absolute top-4 left-4 text-sm text-muted hover:text-brand">
         {t("nav.backHome")}
       </Link>
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold">{t("register.title")}</h1>
-          <p className="text-gray-500 mt-1">{t("register.subtitle")}</p>
+          <p className="text-tertiary mt-1">{t("register.subtitle")}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -119,15 +119,15 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white rounded-md py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="w-full bg-brand text-on-brand rounded-md py-2 text-sm font-medium hover:bg-brand-hover font-ui disabled:opacity-50"
           >
             {loading ? t("register.submitting") : t("register.submit")}
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500">
+        <p className="text-center text-sm text-tertiary">
           {t("register.hasAccount")}
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link href="/login" className="text-brand hover:underline">
             {t("register.login")}
           </Link>
         </p>

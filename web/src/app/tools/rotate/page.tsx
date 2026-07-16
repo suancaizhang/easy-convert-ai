@@ -126,7 +126,7 @@ export default function RotatePage() {
                   className={`px-3 py-2 rounded-md text-sm border ${
                     angle === opt.value
                       ? "border-brand bg-brand-surface text-brand"
-                      : "border-gray-200 hover:border-gray-300"
+                      : "border-border hover:border-brand-light"
                   }`}
                 >
                   {opt.label}
