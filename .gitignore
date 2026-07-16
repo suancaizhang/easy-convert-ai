@@ -28,3 +28,10 @@ Thumbs.db
 # Docker volumes
 postgres_data/
 redis_data/
+
+# Local docs & tools
+.kiro/
+DEPLOYMENT.md
+docs/superpowers/
+infographic/
+knowledge/
