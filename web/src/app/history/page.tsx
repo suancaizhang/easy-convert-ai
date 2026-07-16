@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { FilePreview } from "@/components/preview";
 import type { TranslationKeys } from "@/i18n/types";
 
 interface HistoryItem {
@@ -32,13 +33,13 @@ const TASK_TYPE_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
 };
 
 const PREVIEWABLE_TYPES: Record<string, boolean> = {
-  pdf_to_word: false,
+  pdf_to_word: true,
   pdf_to_image: true,
   word_to_pdf: true,
   excel_to_pdf: true,
   ppt_to_pdf: true,
   images_to_pdf: true,
-  ocr_to_word: false,
+  ocr_to_word: true,
 };
 
 const PREVIEW_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
@@ -50,10 +51,10 @@ const PREVIEW_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
 };
 
 const STATUS_LABEL_KEYS: Record<string, { key: keyof TranslationKeys; className: string }> = {
-  success: { key: "taskStatus.success", className: "text-green-600 bg-green-50" },
-  failed: { key: "taskStatus.failed", className: "text-red-600 bg-red-50" },
-  processing: { key: "taskStatus.processing", className: "text-blue-600 bg-blue-50" },
-  waiting: { key: "taskStatus.waiting", className: "text-yellow-600 bg-yellow-50" },
+  success: { key: "taskStatus.success", className: "text-success-fg bg-success-bg" },
+  failed: { key: "taskStatus.failed", className: "text-error-fg bg-error-bg" },
+  processing: { key: "taskStatus.processing", className: "text-brand bg-brand-surface" },
+  waiting: { key: "taskStatus.waiting", className: "text-warning-fg bg-warning-bg" },
 };
 
 export default function HistoryPage() {
@@ -64,6 +65,8 @@ export default function HistoryPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [fetching, setFetching] = useState(true);
+  const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
+  const [previewTaskType, setPreviewTaskType] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     if (!confirm(t("history.deleteConfirm"))) return;
@@ -81,21 +84,14 @@ export default function HistoryPage() {
     }
   };
 
-  const handlePreview = (taskId: string) => {
-    const token = localStorage.getItem("token");
-    const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8111"}/api/tasks/${taskId}/download?preview=1`;
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    fetch(url, { headers })
-      .then((res) => {
-        if (!res.ok) throw new Error("preview failed");
-        return res.blob();
-      })
-      .then((blob) => {
-        const blobUrl = window.URL.createObjectURL(blob);
-        window.open(blobUrl, "_blank");
-      })
-      .catch(() => alert(t("history.previewFailed")));
+  const handlePreview = (taskId: string, taskType: string) => {
+    setPreviewTaskId(taskId);
+    setPreviewTaskType(taskType);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewTaskId(null);
+    setPreviewTaskType(null);
   };
 
   useEffect(() => {
@@ -123,22 +119,22 @@ export default function HistoryPage() {
   return (
     <main className="min-h-screen p-4 md:p-8 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">{t("history.title")}</h1>
-        <Link href="/convert" className="text-sm text-blue-600 hover:underline">
+        <h1 className="text-2xl font-bold font-content">{t("history.title")}</h1>
+        <Link href="/convert" className="text-sm text-brand hover:underline">
           {t("history.newConvert")}
         </Link>
       </div>
 
       {fetching && items.length === 0 && (
-        <p className="text-gray-400 text-center py-12">{t("history.loading")}</p>
+        <p className="text-muted text-center py-12">{t("history.loading")}</p>
       )}
 
       {!fetching && items.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-gray-400 mb-4">{t("history.empty")}</p>
+          <p className="text-muted mb-4">{t("history.empty")}</p>
           <Link
             href="/convert"
-            className="text-blue-600 hover:underline text-sm"
+            className="text-brand hover:underline text-sm"
           >
             {t("history.startFirst")}
           </Link>
@@ -152,12 +148,12 @@ export default function HistoryPage() {
             return (
               <div
                 key={item.id}
-                className={`border rounded-lg p-4 ${isExpired ? "opacity-50" : ""}`}
+                className={`border border-border rounded-lg p-4 bg-card ${isExpired ? "opacity-50" : ""}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{item.filename}</p>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="font-medium font-content truncate">{item.filename}</p>
+                    <p className="text-sm text-tertiary mt-1">
                       {item.task_type && TASK_TYPE_LABEL_KEYS[item.task_type]
                         ? t(TASK_TYPE_LABEL_KEYS[item.task_type])
                         : item.task_type || "—"}
@@ -169,7 +165,7 @@ export default function HistoryPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {isExpired && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">
+                      <span className="text-xs px-2 py-0.5 rounded bg-page text-muted">
                         {t("history.expired")}
                       </span>
                     )}
@@ -185,8 +181,8 @@ export default function HistoryPage() {
                       item.task_id &&
                       item.task_status === "success" && (
                         <button
-                          onClick={() => handlePreview(item.task_id!)}
-                          className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50 transition-colors"
+                          onClick={() => handlePreview(item.task_id!, item.task_type!)}
+                          className="text-brand hover:text-brand-hover p-1 rounded hover:bg-brand-surface transition-colors"
                           title={PREVIEW_LABEL_KEYS[item.task_type] ? t(PREVIEW_LABEL_KEYS[item.task_type]) : t("history.preview")}
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -197,7 +193,7 @@ export default function HistoryPage() {
                       )}
                     <button
                       onClick={() => handleDelete(item.id)}
-                      className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"
+                      className="text-muted hover:text-error-fg p-1 rounded hover:bg-error-bg transition-colors"
                       title={t("history.delete")}
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -217,21 +213,31 @@ export default function HistoryPage() {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-1 border rounded text-sm disabled:opacity-50"
+            className="px-3 py-1 border border-border rounded text-sm disabled:opacity-50"
           >
             {t("history.prevPage")}
           </button>
-          <span className="px-3 py-1 text-sm text-gray-500">
+          <span className="px-3 py-1 text-sm text-tertiary">
             {t("history.pageInfo", { current: page, total: Math.ceil(total / 20) })}
           </span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={page >= Math.ceil(total / 20)}
-            className="px-3 py-1 border rounded text-sm disabled:opacity-50"
+            className="px-3 py-1 border border-border rounded text-sm disabled:opacity-50"
           >
             {t("history.nextPage")}
           </button>
         </div>
+      )}
+
+      {/* 站内预览 */}
+      {previewTaskId && previewTaskType && (
+        <FilePreview
+          taskId={previewTaskId}
+          taskType={previewTaskType}
+          open={true}
+          onClose={handleClosePreview}
+        />
       )}
     </main>
   );

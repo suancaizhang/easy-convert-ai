@@ -64,13 +64,13 @@ const TASK_TO_ACCEPT_EXT: Record<string, string[]> = {
 };
 
 const PREVIEWABLE_TYPES: Record<string, boolean> = {
-  pdf_to_word: false,
+  pdf_to_word: true,
   pdf_to_image: true,
   word_to_pdf: true,
   excel_to_pdf: true,
   ppt_to_pdf: true,
   images_to_pdf: true,
-  ocr_to_word: false,
+  ocr_to_word: true,
 };
 
 const PREVIEW_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
@@ -79,6 +79,8 @@ const PREVIEW_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
   excel_to_pdf: "convert.previewPdf",
   ppt_to_pdf: "convert.previewPdf",
   images_to_pdf: "convert.previewPdf",
+  pdf_to_word: "convert.previewDocx",
+  ocr_to_word: "convert.previewDocx",
 };
 
 const TASK_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
@@ -239,16 +241,16 @@ function ConvertPageInner() {
   const deleteButton = documentId ? (
     <button
       onClick={handleDelete}
-      className="w-full border border-red-200 text-red-500 rounded-md py-3 text-sm hover:bg-red-50"
+      className="w-full border border-error-bg text-error-fg rounded-md py-3 text-sm hover:bg-error-bg"
     >
       {t("convert.deleteFile")}
     </button>
   ) : null;
 
   const guestFooter = !user ? (
-    <p className="text-center text-sm text-gray-400">
+    <p className="text-center text-sm text-muted">
       {t("convert.guestNote")}
-      <a href="/register" className="text-blue-600 hover:underline">{t("convert.guestRegister")}</a>
+      <a href="/register" className="text-brand hover:underline">{t("convert.guestRegister")}</a>
       {t("convert.guestSuffix")}
     </p>
   ) : null;
@@ -261,7 +263,9 @@ function ConvertPageInner() {
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
+      taskType={taskType}
       canPreview={canPreview}
+      showPreview={tool.showPreview}
       previewLabel={previewLabel}
       downloadLabel={t("convert.download")}
       convertingLabel={tool.uploadProgress < 100 ? t("convert.uploading", { progress: tool.uploadProgress }) : t("convert.converting")}
@@ -273,6 +277,7 @@ function ConvertPageInner() {
       continueLabel={t("convert.continue")}
       onDownload={tool.download}
       onPreview={tool.preview}
+      onClosePreview={tool.closePreview}
       onReset={handleReset}
       extraActions={deleteButton}
       footer={guestFooter}
@@ -281,7 +286,7 @@ function ConvertPageInner() {
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
         onClick={() => fileInputRef.current?.click()}
-        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 transition-colors"
+        className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-brand-light transition-colors"
       >
         <input
           ref={fileInputRef}
@@ -301,20 +306,20 @@ function ConvertPageInner() {
                 e.stopPropagation();
                 handleRemoveFile();
               }}
-              className="absolute -top-2 -right-2 w-6 h-6 bg-gray-200 hover:bg-red-100 text-gray-500 hover:text-red-500 rounded-full flex items-center justify-center text-sm"
+              className="absolute -top-2 -right-2 w-6 h-6 bg-page hover:bg-error-bg text-muted hover:text-error-fg rounded-full flex items-center justify-center text-sm"
               title={t("convert.removeFile")}
             >
               ×
             </button>
-            <p className="font-medium">{file.name}</p>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="font-medium font-content">{file.name}</p>
+            <p className="text-sm text-tertiary mt-1">
               {(file.size / 1024 / 1024).toFixed(2)} MB
             </p>
           </div>
         ) : (
           <div>
-            <p className="text-gray-500">{t("convert.dropzone")}</p>
-            <p className="text-xs text-gray-400 mt-2">
+            <p className="text-tertiary">{t("convert.dropzone")}</p>
+            <p className="text-xs text-muted mt-2">
               {presetTaskType
                 ? t("convert.dropzoneHintPreset", { formats: (TASK_TO_ACCEPT_EXT[presetTaskType] || []).map(e => e.toUpperCase()).join("、") })
                 : t("convert.dropzoneHint")}
@@ -333,8 +338,8 @@ function ConvertPageInner() {
                 onClick={() => setTaskType(opt.value)}
                 className={`px-3 py-2 rounded-md text-sm border ${
                   taskType === opt.value
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-gray-200 hover:border-gray-300"
+                    ? "border-brand bg-brand-surface text-brand"
+                    : "border-border hover:border-brand-light"
                 }`}
               >
                 {t(opt.labelKey)}
@@ -345,18 +350,18 @@ function ConvertPageInner() {
       )}
 
       {file && !presetTaskType && options.length === 1 && (
-        <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-md px-3 py-2">
-          <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex items-center gap-2 text-sm text-secondary bg-page rounded-md px-3 py-2">
+          <svg className="w-4 h-4 text-brand flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-          <span>{t("convert.conversionType")}<span className="font-medium text-gray-800">{t(options[0].labelKey)}</span></span>
+          <span>{t("convert.conversionType")}<span className="font-medium text-primary">{t(options[0].labelKey)}</span></span>
         </div>
       )}
 
       <button
         onClick={handleUploadAndConvert}
         disabled={!file || !taskType}
-        className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed font-ui"
       >
         {t("convert.startConvert")}
       </button>
