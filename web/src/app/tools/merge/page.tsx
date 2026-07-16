@@ -96,20 +96,23 @@ export default function MergePage() {
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
+      taskType="pdf_merge"
       canPreview
+      showPreview={tool.showPreview}
       previewLabel="预览 PDF"
       downloadLabel="下载 PDF"
       convertingLabel="合并中，请稍候..."
       doneLabel="合并完成！"
       onDownload={tool.download}
       onPreview={tool.preview}
+      onClosePreview={tool.closePreview}
       onReset={handleReset}
     >
       <div
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
         onClick={() => fileInputRef.current?.click()}
-        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 transition-colors"
+        className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-brand-light transition-colors"
       >
         <input
           ref={fileInputRef}
@@ -122,29 +125,29 @@ export default function MergePage() {
             e.target.value = "";
           }}
         />
-        <p className="text-gray-500">点击或拖拽文件到此处</p>
-        <p className="text-xs text-gray-400 mt-2">PDF、PNG、JPG、WebP，每个最大 20MB，最多 {MAX_FILES} 个</p>
+        <p className="text-tertiary">点击或拖拽文件到此处</p>
+        <p className="text-xs text-muted mt-2">PDF、PNG、JPG、WebP，每个最大 20MB，最多 {MAX_FILES} 个</p>
       </div>
 
       {files.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-medium">已选 {files.length} 个文件（拖拽排序）</p>
           {files.map((f, i) => (
-            <div key={`${f.name}-${i}`} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md text-sm">
+            <div key={`${f.name}-${i}`} className="flex items-center gap-2 p-2 bg-page rounded-md text-sm">
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleMoveUp(i); }}
                 disabled={i === 0}
-                className="text-gray-400 hover:text-blue-500 disabled:opacity-30"
+                className="text-muted hover:text-brand disabled:opacity-30"
               >
                 ↑
               </button>
               <span className="flex-1 truncate">{f.name}</span>
-              <span className="text-gray-400 text-xs">{(f.size / 1024 / 1024).toFixed(1)}MB</span>
+              <span className="text-muted text-xs">{(f.size / 1024 / 1024).toFixed(1)}MB</span>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleRemove(i); }}
-                className="text-gray-400 hover:text-red-500"
+                className="text-muted hover:text-error-fg"
               >
                 ×
               </button>
@@ -156,7 +159,7 @@ export default function MergePage() {
       <button
         onClick={handleStart}
         disabled={files.length < 2}
-        className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui disabled:opacity-50 disabled:cursor-not-allowed"
       >
         开始合并（{files.length} 个文件）
       </button>

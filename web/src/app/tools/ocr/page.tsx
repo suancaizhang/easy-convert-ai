@@ -82,10 +82,11 @@ function OcrPageInner() {
   }, []);
 
   const handleSubmit = async () => {
-    if (!user) {
-      router.push("/login");
-      return;
-    }
+    // TODO: 测试期间放开登录限制，上线前恢复
+    // if (!user) {
+    //   router.push("/login");
+    //   return;
+    // }
     if (!file) return;
     setLocalError("");
     await tool.uploadAndRun([file]);
@@ -98,14 +99,15 @@ function OcrPageInner() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const loginPrompt = !user ? (
-    <p className="text-center text-sm text-amber-600 bg-amber-50 rounded-md px-3 py-2">
-      {t("ocr.loginRequired")}
-      <a href="/login" className="font-medium underline hover:text-amber-800">
-        {t("ocr.loginLink")}
-      </a>
-    </p>
-  ) : null;
+  const loginPrompt = null; // TODO: 测试期间隐藏登录提示，上线前恢复
+  // const loginPrompt = !user ? (
+  //   <p className="text-center text-sm text-amber-600 bg-amber-50 rounded-md px-3 py-2">
+  //     {t("ocr.loginRequired")}
+  //     <a href="/login" className="font-medium underline hover:text-amber-800">
+  //       {t("ocr.loginLink")}
+  //     </a>
+  //   </p>
+  // ) : null;
 
   return (
     <ToolPageLayout
@@ -116,7 +118,10 @@ function OcrPageInner() {
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
-      canPreview={false}
+      taskType="ocr_to_word"
+      canPreview
+      showPreview={tool.showPreview}
+      previewLabel={t("ocr.preview")}
       downloadLabel={t("ocr.download")}
       convertingLabel={
         tool.uploadProgress < 100
@@ -130,6 +135,8 @@ function OcrPageInner() {
       retryLabel={t("ocr.retry")}
       continueLabel={t("ocr.continue")}
       onDownload={tool.download}
+      onPreview={tool.preview}
+      onClosePreview={tool.closePreview}
       onReset={handleReset}
       footer={loginPrompt}
     >
@@ -138,7 +145,7 @@ function OcrPageInner() {
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
         onClick={() => fileInputRef.current?.click()}
-        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 transition-colors"
+        className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-brand-light transition-colors"
       >
         <input
           ref={fileInputRef}
@@ -160,20 +167,20 @@ function OcrPageInner() {
                 setLocalError("");
                 if (fileInputRef.current) fileInputRef.current.value = "";
               }}
-              className="absolute -top-2 -right-2 w-6 h-6 bg-gray-200 hover:bg-red-100 text-gray-500 hover:text-red-500 rounded-full flex items-center justify-center text-sm"
+              className="absolute -top-2 -right-2 w-6 h-6 bg-gray-200 hover:bg-red-100 text-tertiary hover:text-error-fg rounded-full flex items-center justify-center text-sm"
               title={t("convert.removeFile")}
             >
               ×
             </button>
             <p className="font-medium">{file.name}</p>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-tertiary mt-1">
               {(file.size / 1024 / 1024).toFixed(2)} MB
             </p>
           </div>
         ) : (
           <div>
-            <p className="text-gray-500">{t("ocr.dropzone")}</p>
-            <p className="text-xs text-gray-400 mt-2">{t("ocr.dropzoneHint")}</p>
+            <p className="text-tertiary">{t("ocr.dropzone")}</p>
+            <p className="text-xs text-muted mt-2">{t("ocr.dropzoneHint")}</p>
           </div>
         )}
       </div>
@@ -188,7 +195,7 @@ function OcrPageInner() {
               onClick={() => setOutputFormat(fmt.value)}
               className={`px-3 py-2 rounded-md text-sm border transition-colors ${
                 outputFormat === fmt.value
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  ? "border-brand bg-brand-surface text-brand"
                   : "border-gray-200 hover:border-gray-300"
               }`}
             >
@@ -201,7 +208,7 @@ function OcrPageInner() {
       <button
         onClick={handleSubmit}
         disabled={!file}
-        className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {t("ocr.startConvert")}
       </button>

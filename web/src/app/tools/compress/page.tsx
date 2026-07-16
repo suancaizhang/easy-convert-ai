@@ -71,20 +71,23 @@ export default function CompressPage() {
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
+      taskType="pdf_compress"
       canPreview
+      showPreview={tool.showPreview}
       previewLabel="预览 PDF"
       downloadLabel="下载压缩后的 PDF"
       convertingLabel="压缩中..."
       doneLabel="压缩完成！"
       onDownload={tool.download}
       onPreview={tool.preview}
+      onClosePreview={tool.closePreview}
       onReset={handleReset}
     >
       <div
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
         onClick={() => fileInputRef.current?.click()}
-        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 transition-colors"
+        className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-brand-light transition-colors"
       >
         <input
           ref={fileInputRef}
@@ -99,12 +102,12 @@ export default function CompressPage() {
         {file ? (
           <div>
             <p className="font-medium">{file.name}</p>
-            <p className="text-sm text-gray-500 mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+            <p className="text-sm text-tertiary mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
           </div>
         ) : (
           <div>
-            <p className="text-gray-500">点击或拖拽 PDF 到此处</p>
-            <p className="text-xs text-gray-400 mt-2">最大 20MB</p>
+            <p className="text-tertiary">点击或拖拽 PDF 到此处</p>
+            <p className="text-xs text-muted mt-2">最大 20MB</p>
           </div>
         )}
       </div>
@@ -119,7 +122,7 @@ export default function CompressPage() {
                 onClick={() => setQuality(opt.value)}
                 className={`px-3 py-2 rounded-md text-sm border ${
                   quality === opt.value
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    ? "border-brand bg-brand-surface text-brand"
                     : "border-gray-200 hover:border-gray-300"
                 }`}
               >
@@ -133,7 +136,7 @@ export default function CompressPage() {
       <button
         onClick={handleStart}
         disabled={!file}
-        className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui disabled:opacity-50 disabled:cursor-not-allowed"
       >
         开始压缩
       </button>
