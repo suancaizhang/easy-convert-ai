@@ -16,6 +16,11 @@ from worker.converters.ppt_to_pdf import PptToPdfConverter
 from worker.converters.pdf_to_image import PdfToImageConverter
 from worker.converters.images_to_pdf import ImagesToPdfConverter
 from worker.converters.ocr_to_word import OcrToWordConverter
+from worker.converters.pdf_merge import PdfMergeConverter
+from worker.converters.pdf_split import PdfSplitConverter
+from worker.converters.pdf_compress import PdfCompressConverter
+from worker.converters.pdf_rotate import PdfRotateConverter
+from worker.converters.pdf_watermark import PdfWatermarkConverter
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +32,11 @@ CONVERTER_MAP = {
     "pdf_to_image": PdfToImageConverter,
     "images_to_pdf": ImagesToPdfConverter,
     "ocr_to_word": OcrToWordConverter,
+    "pdf_merge": PdfMergeConverter,
+    "pdf_split": PdfSplitConverter,
+    "pdf_compress": PdfCompressConverter,
+    "pdf_rotate": PdfRotateConverter,
+    "pdf_watermark": PdfWatermarkConverter,
 }
 
 ERROR_CODES = {
@@ -85,7 +95,7 @@ def _run_conversion(self, task_id: str):
         converter = converter_cls()
 
         try:
-            result = converter.convert(input_path, output_dir)
+            result = converter.convert(input_path, output_dir, task.params)
         except ValueError as e:
             _fail_task(db, task, str(e), "ERR_003")
             return

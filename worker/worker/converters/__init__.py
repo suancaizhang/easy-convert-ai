@@ -24,7 +24,7 @@ class ConvertResult:
 
 class DocumentConverter(ABC):
     @abstractmethod
-    def convert(self, input_path: str, output_dir: str) -> ConvertResult:
+    def convert(self, input_path: str, output_dir: str, params: dict | None = None) -> ConvertResult:
         ...
 
     @property

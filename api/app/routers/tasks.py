@@ -19,6 +19,8 @@ celery_app = Celery(broker=settings.celery_broker_url)
 
 OFFICE_TYPES = {"excel_to_pdf", "ppt_to_pdf", "word_to_pdf"}
 
+PDF_TOOL_TYPES = {"pdf_merge", "pdf_split", "pdf_compress", "pdf_rotate", "pdf_watermark"}
+
 ALLOWED_OUTPUT_PREFIXES = ["/tmp/convert_", "/tmp/uploads", "/tmp/guest"]
 
 
@@ -30,6 +32,7 @@ class CreateTaskRequest(BaseModel):
     task_type: str
     ocr_mode: str | None = None
     params: dict | None = None
+    source_document_ids: list[str] | None = None
 
 
 class CreateMergeRequest(BaseModel):
@@ -61,14 +64,39 @@ def create_task(
     current_user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
-    document = db.query(Document).filter(
-        Document.id == uuid.UUID(body.document_id)
-    ).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="文档不存在")
+    source_doc_ids: list[str] | None = None
 
-    if current_user and document.user_id and document.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="无权操作此文档")
+    if body.task_type == "pdf_merge":
+        if not body.source_document_ids or len(body.source_document_ids) < 2:
+            raise HTTPException(status_code=400, detail="合并需要至少 2 个文档")
+
+        try:
+            doc_uuids = [uuid.UUID(d) for d in body.source_document_ids]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="document_id 格式不合法")
+
+        documents = db.query(Document).filter(Document.id.in_(doc_uuids)).all()
+        found_ids = {str(d.id) for d in documents}
+        missing = [d for d in body.source_document_ids if d not in found_ids]
+        if missing:
+            raise HTTPException(status_code=400, detail=f"文档不存在: {', '.join(missing)}")
+
+        for doc in documents:
+            if current_user and doc.user_id and doc.user_id != current_user.id:
+                raise HTTPException(status_code=403, detail="无权操作此文档")
+
+        source_doc_ids = body.source_document_ids
+        doc_map = {str(d.id): d for d in documents}
+        document = doc_map[source_doc_ids[0]]
+    else:
+        document = db.query(Document).filter(
+            Document.id == uuid.UUID(body.document_id)
+        ).first()
+        if not document:
+            raise HTTPException(status_code=404, detail="文档不存在")
+
+        if current_user and document.user_id and document.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="无权操作此文档")
 
     if current_user:
         active = db.query(Task).join(Document).filter(
@@ -78,7 +106,8 @@ def create_task(
         if active:
             raise HTTPException(status_code=429, detail="当前有正在进行的任务，请等待完成")
 
-    consume_quota(db, current_user, request)
+    if body.task_type not in PDF_TOOL_TYPES:
+        consume_quota(db, current_user, request)
 
     task = Task(
         id=uuid.uuid4(),
@@ -87,6 +116,7 @@ def create_task(
         ocr_mode=body.ocr_mode,
         params=body.params,
         status="waiting",
+        source_document_ids=source_doc_ids,
     )
     db.add(task)
     db.commit()
