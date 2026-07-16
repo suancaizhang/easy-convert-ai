@@ -8,7 +8,7 @@ AI 驱动的在线文档转换平台，支持 PDF、Word、Excel、PPT、图片�
 - **Office → PDF**: Excel、PPT 一键转 PDF（LibreOffice 引擎）
 - **PDF → 图片**: PDF 逐页渲染为 PNG（150 DPI）
 - **图片 → PDF**: 多张图片合并为 PDF
-- **OCR 识别**: PaddleOCR + 小米 MiMo v2.5 多模态 AI 双引擎，支持中文识别
+- **OCR 识别**: PaddleOCR-VL 1.6 云服务，支持中英文识别
 - **多图合并转 PDF**: 支持 2~20 张图片批量合并为单个 PDF，独立页面操作
 - **用户体系**: 注册登录、JWT 鉴权、游客免注册试用
 - **配额管理**: 注册用户 8 次/天，游客 3 次/天（IP 限流），自动重置
@@ -27,7 +27,7 @@ AI 驱动的在线文档转换平台，支持 PDF、Word、Excel、PPT、图片�
 | 任务队列 | Celery 5.4 + Redis（双队列: default / office） |
 | 数据库 | PostgreSQL 16 |
 | 转换引擎 | PyMuPDF、python-docx、LibreOffice Headless |
-| OCR | PaddleOCR + 小米 MiMo v2.5（fallback） |
+| OCR | PaddleOCR-VL 1.6 云服务 |
 | 部署 | Docker Compose（5 容器） |
 
 ## 架构
@@ -35,7 +35,7 @@ AI 驱动的在线文档转换平台，支持 PDF、Word、Excel、PPT、图片�
 ```
 ┌──────────┐     ┌──────────┐     ┌───────────┐
 │  Next.js │────▶│ FastAPI  │────▶│   Redis   │
-│  :3000   │     │  :8111   │     │   :6379   │
+│  :3000   │     │  :8000   │     │   :6379   │
 └──────────┘     └────┬─────┘     └─────┬─────┘
                       │                  │
                       ▼                  ▼
@@ -44,6 +44,8 @@ AI 驱动的在线文档转换平台，支持 PDF、Word、Excel、PPT、图片�
                 │  :5432   │     │ (default+office)│
                 └──────────┘     └───────────────┘
 ```
+
+> 注：Docker 部署暴露 `:8000`，本地开发通常使用 `:8111`。
 
 **数据流**:
 1. 用户上传文件 → API 存储到共享卷 → 返回 document_id
@@ -256,8 +258,8 @@ npm run dev
 | `JWT_SECRET` | **必填** JWT 签名密钥 | 无默认值，不设置则启动失败 |
 | `JWT_ALGORITHM` | JWT 算法 | `HS256` |
 | `JWT_EXPIRE_MINUTES` | Token 过期时间（分钟） | `1440`（24 小时） |
-| `MIMO_API_KEY` | 小米 MiMo 多模态 API Key（可选，用于 OCR 高精度模式） | 空 |
-| `API_DEBUG` | 调试模式 | `true` |
+| `PADDLE_OCR_TOKEN` | PaddleOCR-VL 云服务认证 Token（OCR 功能必需） | 空（未设置时 OCR 转换会失败） |
+| `DEBUG` | 调试模式 | `true` |
 
 ## API 接口
 
@@ -357,8 +359,7 @@ easy-convert-ai/
 
 - 文件存储使用 Docker 共享卷，非持久化对象存储
 - 暂无登录频率限制（计划集成 slowapi）
-- OCR 双引擎：normal 模式优先 PaddleOCR，失败时降级到小米 MiMo v2.5；high_accuracy 模式优先 MiMo
-- PaddleOCR 未默认安装（需要 `paddlepaddle` 和 `paddleocr` Python 包），默认 fallback 使用 MiMo API
+- OCR 依赖 PaddleOCR-VL 1.6 云 API，需配置 `PADDLE_OCR_TOKEN`，无本地 fallback
 - 尚未实现微信 OAuth 登录
 - 无生产级监控和日志聚合
 
