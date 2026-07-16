@@ -85,10 +85,7 @@ def _run_conversion(self, task_id: str):
         converter = converter_cls()
 
         try:
-            if task.task_type == "ocr_to_word":
-                result = converter.convert(input_path, output_dir, ocr_mode=task.ocr_mode or "normal")
-            else:
-                result = converter.convert(input_path, output_dir)
+            result = converter.convert(input_path, output_dir)
         except ValueError as e:
             _fail_task(db, task, str(e), "ERR_003")
             return

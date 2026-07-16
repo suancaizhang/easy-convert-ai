@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
+import type { TranslationKeys } from "@/i18n/types";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -18,25 +20,25 @@ const ALLOWED_TYPES = [
 
 const MAX_SIZE = 20 * 1024 * 1024;
 
-const TASK_TYPE_OPTIONS: Record<string, { label: string; value: string }[]> = {
+const TASK_TYPE_OPTIONS: Record<string, { labelKey: keyof TranslationKeys; value: string }[]> = {
   pdf: [
-    { label: "PDF → Word", value: "pdf_to_word" },
-    { label: "PDF → 图片", value: "pdf_to_image" },
+    { labelKey: "taskType.pdfToWord", value: "pdf_to_word" },
+    { labelKey: "taskType.pdfToImage", value: "pdf_to_image" },
   ],
-  docx: [{ label: "Word → PDF", value: "word_to_pdf" }],
-  xlsx: [{ label: "Excel → PDF", value: "excel_to_pdf" }],
-  pptx: [{ label: "PPT → PDF", value: "ppt_to_pdf" }],
+  docx: [{ labelKey: "taskType.wordToPdf", value: "word_to_pdf" }],
+  xlsx: [{ labelKey: "taskType.excelToPdf", value: "excel_to_pdf" }],
+  pptx: [{ labelKey: "taskType.pptToPdf", value: "ppt_to_pdf" }],
   png: [
-    { label: "图片转文字(OCR 识别) → Word", value: "ocr_to_word" },
-    { label: "图片 → PDF", value: "images_to_pdf" },
+    { labelKey: "taskType.ocrToWord", value: "ocr_to_word" },
+    { labelKey: "taskType.imagesToPdf", value: "images_to_pdf" },
   ],
   jpg: [
-    { label: "图片转文字(OCR 识别) → Word", value: "ocr_to_word" },
-    { label: "图片 → PDF", value: "images_to_pdf" },
+    { labelKey: "taskType.ocrToWord", value: "ocr_to_word" },
+    { labelKey: "taskType.imagesToPdf", value: "images_to_pdf" },
   ],
   webp: [
-    { label: "图片转文字(OCR 识别) → Word", value: "ocr_to_word" },
-    { label: "图片 → PDF", value: "images_to_pdf" },
+    { labelKey: "taskType.ocrToWord", value: "ocr_to_word" },
+    { labelKey: "taskType.imagesToPdf", value: "images_to_pdf" },
   ],
 };
 
@@ -63,31 +65,31 @@ const TASK_TO_ACCEPT_EXT: Record<string, string[]> = {
 };
 
 const PREVIEWABLE_TYPES: Record<string, boolean> = {
-  pdf_to_word: false,   // .docx 浏览器无法直接预览
-  pdf_to_image: true,   // 图片
-  word_to_pdf: true,    // PDF
-  excel_to_pdf: true,   // PDF
-  ppt_to_pdf: true,     // PDF
-  images_to_pdf: true,  // PDF
-  ocr_to_word: false,   // .docx 浏览器无法直接预览
+  pdf_to_word: false,
+  pdf_to_image: true,
+  word_to_pdf: true,
+  excel_to_pdf: true,
+  ppt_to_pdf: true,
+  images_to_pdf: true,
+  ocr_to_word: false,
 };
 
-const PREVIEW_LABELS: Record<string, string> = {
-  pdf_to_image: "预览图片",
-  word_to_pdf: "预览 PDF",
-  excel_to_pdf: "预览 PDF",
-  ppt_to_pdf: "预览 PDF",
-  images_to_pdf: "预览 PDF",
+const PREVIEW_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
+  pdf_to_image: "convert.previewImage",
+  word_to_pdf: "convert.previewPdf",
+  excel_to_pdf: "convert.previewPdf",
+  ppt_to_pdf: "convert.previewPdf",
+  images_to_pdf: "convert.previewPdf",
 };
 
-const TASK_LABELS: Record<string, string> = {
-  pdf_to_word: "PDF 转 Word",
-  pdf_to_image: "PDF 转图片",
-  word_to_pdf: "Word 转 PDF",
-  excel_to_pdf: "Excel 转 PDF",
-  ppt_to_pdf: "PPT 转 PDF",
-  images_to_pdf: "图片转 PDF",
-  ocr_to_word: "图片转文字(OCR 识别) → Word",
+const TASK_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
+  pdf_to_word: "taskType.pdfToWord",
+  pdf_to_image: "taskType.pdfToImage",
+  word_to_pdf: "taskType.wordToPdf",
+  excel_to_pdf: "taskType.excelToPdf",
+  ppt_to_pdf: "taskType.pptToPdf",
+  images_to_pdf: "taskType.imagesToPdf",
+  ocr_to_word: "taskType.ocrToWord",
 };
 
 export default function ConvertPage() {
@@ -100,10 +102,10 @@ export default function ConvertPage() {
 
 function ConvertPageInner() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // 预选模式：从 URL 读取 taskType 参数
   const presetTaskType = (() => {
     const param = searchParams.get("taskType");
     if (param && (VALID_TASK_TYPES as readonly string[]).includes(param)) {
@@ -138,21 +140,20 @@ function ConvertPageInner() {
 
   const handleFileSelect = (f: File) => {
     if (!ALLOWED_TYPES.includes(f.type) && !getFileExt(f)) {
-      setError("不支持的文件格式");
+      setError(t("convert.unsupportedFormat"));
       return;
     }
     if (f.size > MAX_SIZE) {
-      setError("文件大小超过 20MB 限制");
+      setError(t("convert.fileTooLarge"));
       return;
     }
 
     const ext = getFileExt(f);
 
-    // 预选模式下校验文件类型是否匹配
     if (presetTaskType) {
       const allowedExts = TASK_TO_ACCEPT_EXT[presetTaskType] || [];
       if (!allowedExts.includes(ext)) {
-        setError(`当前模式仅支持 ${allowedExts.map(e => `.${e}`).join("、")} 格式的文件`);
+        setError(t("convert.formatMismatch", { formats: allowedExts.map(e => `.${e}`).join("、") }));
         return;
       }
     }
@@ -160,7 +161,6 @@ function ConvertPageInner() {
     setFile(f);
     setError("");
 
-    // 预选模式下 taskType 已锁定，不覆盖
     if (!presetTaskType) {
       const options = TASK_TYPE_OPTIONS[ext];
       if (options && options.length === 1) {
@@ -204,7 +204,7 @@ function ConvertPageInner() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("操作失败，请重试");
+        setError(t("convert.operationFailed"));
       }
     }
   };
@@ -230,14 +230,14 @@ function ConvertPageInner() {
         }
         if (res.status === "failed") {
           setStage("error");
-          setError(res.error_message || "转换失败");
+          setError(res.error_message || t("convert.convertFailed"));
           return;
         }
 
         attempts++;
         if (attempts >= MAX_ATTEMPTS) {
           setStage("error");
-          setError("转换超时，请稍后在历史记录中查看结果");
+          setError(t("convert.timeout"));
           return;
         }
 
@@ -250,7 +250,7 @@ function ConvertPageInner() {
         attempts++;
         if (attempts >= MAX_ATTEMPTS) {
           setStage("error");
-          setError("连接超时，请稍后重试");
+          setError(t("convert.connectionTimeout"));
           return;
         }
         pollingRef.current = setTimeout(poll, 5000);
@@ -268,17 +268,16 @@ function ConvertPageInner() {
     }/api/tasks/${taskId}/download?preview=1`;
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    // 通过 blob 创建对象 URL 打开预览，避免认证问题
     fetch(url, { headers })
       .then((res) => {
-        if (!res.ok) throw new Error("预览失败");
+        if (!res.ok) throw new Error("preview failed");
         return res.blob();
       })
       .then((blob) => {
         const blobUrl = window.URL.createObjectURL(blob);
         window.open(blobUrl, "_blank");
       })
-      .catch(() => setError("预览失败"));
+      .catch(() => setError(t("convert.previewFailed")));
   };
 
   const handleDownload = async () => {
@@ -290,7 +289,7 @@ function ConvertPageInner() {
 
     try {
       const res = await fetch(url, { headers });
-      if (!res.ok) throw new Error("下载失败");
+      if (!res.ok) throw new Error("download failed");
       const blob = await res.blob();
       const disposition = res.headers.get("content-disposition");
       let filename = "converted_file";
@@ -305,7 +304,7 @@ function ConvertPageInner() {
       a.click();
       window.URL.revokeObjectURL(blobUrl);
     } catch {
-      setError("下载失败，请重试");
+      setError(t("convert.downloadFailed"));
     }
   };
 
@@ -324,7 +323,7 @@ function ConvertPageInner() {
 
   const handleDelete = async () => {
     if (!documentId) return;
-    if (!confirm("确定要删除此文件吗？删除后无法恢复。")) return;
+    if (!confirm(t("convert.deleteConfirm"))) return;
 
     try {
       await api.delete(`/api/documents/${documentId}`);
@@ -333,14 +332,16 @@ function ConvertPageInner() {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("删除失败，请重试");
+        setError(t("convert.deleteFailed"));
       }
     }
   };
 
   const handleRemoveFile = () => {
     setFile(null);
-    setTaskType("");
+    if (!presetTaskType) {
+      setTaskType("");
+    }
     setError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -348,19 +349,18 @@ function ConvertPageInner() {
   const ext = file ? getFileExt(file) : "";
   const options = ext ? TASK_TYPE_OPTIONS[ext] || [] : [];
 
-  // 预选模式下的 accept 过滤
   const acceptFilter = presetTaskType
     ? (TASK_TO_ACCEPT_EXT[presetTaskType] || []).map((e) => `.${e}`).join(",")
     : ".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp";
 
-  const pageTitle = presetTaskType
-    ? TASK_LABELS[presetTaskType] || "文档转换"
-    : "文档转换";
+  const pageTitle = presetTaskType && TASK_LABEL_KEYS[presetTaskType]
+    ? t(TASK_LABEL_KEYS[presetTaskType])
+    : t("convert.title");
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 relative">
       <Link href="/" className="absolute top-4 left-4 text-sm text-gray-400 hover:text-blue-600">
-        ← 返回首页
+        {t("nav.backHome")}
       </Link>
       <div className="w-full max-w-lg space-y-6">
         <h1 className="text-2xl font-bold text-center">{pageTitle}</h1>
@@ -392,7 +392,7 @@ function ConvertPageInner() {
                       handleRemoveFile();
                     }}
                     className="absolute -top-2 -right-2 w-6 h-6 bg-gray-200 hover:bg-red-100 text-gray-500 hover:text-red-500 rounded-full flex items-center justify-center text-sm"
-                    title="移除文件"
+                    title={t("convert.removeFile")}
                   >
                     ×
                   </button>
@@ -403,11 +403,11 @@ function ConvertPageInner() {
                 </div>
               ) : (
                 <div>
-                  <p className="text-gray-500">拖拽文件到此处，或点击选择文件</p>
+                  <p className="text-gray-500">{t("convert.dropzone")}</p>
                   <p className="text-xs text-gray-400 mt-2">
                     {presetTaskType
-                      ? `支持 ${(TASK_TO_ACCEPT_EXT[presetTaskType] || []).map(e => e.toUpperCase()).join("、")} 格式（最大 20MB）`
-                      : "支持 PDF、Word、Excel、PPT、PNG、JPG、WebP（最大 20MB）"}
+                      ? t("convert.dropzoneHintPreset", { formats: (TASK_TO_ACCEPT_EXT[presetTaskType] || []).map(e => e.toUpperCase()).join("、") })
+                      : t("convert.dropzoneHint")}
                   </p>
                 </div>
               )}
@@ -415,7 +415,7 @@ function ConvertPageInner() {
 
             {file && !presetTaskType && options.length > 1 && (
               <div>
-                <label className="block text-sm font-medium mb-2">选择转换类型</label>
+                <label className="block text-sm font-medium mb-2">{t("convert.selectType")}</label>
                 <div className="grid grid-cols-2 gap-2">
                   {options.map((opt) => (
                     <button
@@ -427,7 +427,7 @@ function ConvertPageInner() {
                           : "border-gray-200 hover:border-gray-300"
                       }`}
                     >
-                      {opt.label}
+                      {t(opt.labelKey)}
                     </button>
                   ))}
                 </div>
@@ -439,7 +439,7 @@ function ConvertPageInner() {
                 <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span>转换类型：<span className="font-medium text-gray-800">{options[0].label}</span></span>
+                <span>{t("convert.conversionType")}<span className="font-medium text-gray-800">{t(options[0].labelKey)}</span></span>
               </div>
             )}
 
@@ -454,7 +454,7 @@ function ConvertPageInner() {
               disabled={!file || !taskType}
               className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              开始转换
+              {t("convert.startConvert")}
             </button>
           </>
         )}
@@ -463,9 +463,11 @@ function ConvertPageInner() {
           <div className="text-center space-y-4 py-8">
             <div className="animate-spin w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto" />
             <p className="text-gray-600">
-              {uploadProgress < 100 ? `上传中 ${uploadProgress}%` : "转换中，请稍候..."}
+              {uploadProgress < 100
+                ? t("convert.uploading", { progress: uploadProgress })
+                : t("convert.converting")}
             </p>
-            <p className="text-sm text-gray-400">状态: {taskStatus}</p>
+            <p className="text-sm text-gray-400">{t("convert.status", { status: taskStatus })}</p>
           </div>
         )}
 
@@ -476,32 +478,32 @@ function ConvertPageInner() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="font-medium">转换完成！</p>
+            <p className="font-medium">{t("convert.done")}</p>
             {outputTaskType && PREVIEWABLE_TYPES[outputTaskType] && (
               <button
                 onClick={handlePreview}
                 className="w-full bg-blue-600 text-white rounded-md py-3 font-medium hover:bg-blue-700"
               >
-                {PREVIEW_LABELS[outputTaskType] || "预览文件"}
+                {PREVIEW_LABEL_KEYS[outputTaskType] ? t(PREVIEW_LABEL_KEYS[outputTaskType]) : t("convert.previewFile")}
               </button>
             )}
             <button
               onClick={handleDownload}
               className="w-full bg-green-600 text-white rounded-md py-3 font-medium hover:bg-green-700"
             >
-              下载文件
+              {t("convert.download")}
             </button>
             <button
               onClick={handleReset}
               className="w-full border rounded-md py-3 text-sm hover:bg-gray-50"
             >
-              继续转换
+              {t("convert.continue")}
             </button>
             <button
               onClick={handleDelete}
               className="w-full border border-red-200 text-red-500 rounded-md py-3 text-sm hover:bg-red-50"
             >
-              删除文件
+              {t("convert.deleteFile")}
             </button>
           </div>
         )}
@@ -518,14 +520,14 @@ function ConvertPageInner() {
               onClick={handleReset}
               className="w-full border rounded-md py-3 text-sm hover:bg-gray-50"
             >
-              重试
+              {t("convert.retry")}
             </button>
             {documentId && (
               <button
                 onClick={handleDelete}
                 className="w-full border border-red-200 text-red-500 rounded-md py-3 text-sm hover:bg-red-50"
               >
-                删除文件
+                {t("convert.deleteFile")}
               </button>
             )}
           </div>
@@ -533,9 +535,9 @@ function ConvertPageInner() {
 
         {!user && stage === "upload" && (
           <p className="text-center text-sm text-gray-400">
-            游客每日可免费转换 3 次，
-            <a href="/register" className="text-blue-600 hover:underline">注册</a>
-            后可获得更多次数
+            {t("convert.guestNote")}
+            <a href="/register" className="text-blue-600 hover:underline">{t("convert.guestRegister")}</a>
+            {t("convert.guestSuffix")}
           </p>
         )}
       </div>

@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import uuid
 
@@ -15,9 +16,16 @@ class ExcelToPdfConverter(DocumentConverter):
         return OutputFormat.PDF
 
     def convert(self, input_path: str, output_dir: str) -> ConvertResult:
+        lo_path = shutil.which("libreoffice") or shutil.which("soffice")
+        if not lo_path:
+            raise ValueError(
+                "LibreOffice is not installed or not in PATH. "
+                "Install with: apt-get install libreoffice-calc"
+            )
+
         result = subprocess.run(
             [
-                "libreoffice",
+                lo_path,
                 "--headless",
                 "--convert-to",
                 "pdf",
