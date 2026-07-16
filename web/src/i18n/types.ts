@@ -149,6 +149,26 @@ export interface TranslationKeys {
   "api.uploadFailed": string;
   "api.networkError": string;
 
+  // ocr page
+  "ocr.title": string;
+  "ocr.subtitle": string;
+  "ocr.dropzone": string;
+  "ocr.dropzoneHint": string;
+  "ocr.outputFormat": string;
+  "ocr.formatDocx": string;
+  "ocr.formatTxt": string;
+  "ocr.formatSearchablePdf": string;
+  "ocr.startConvert": string;
+  "ocr.converting": string;
+  "ocr.done": string;
+  "ocr.download": string;
+  "ocr.continue": string;
+  "ocr.retry": string;
+  "ocr.loginRequired": string;
+  "ocr.loginLink": string;
+  "ocr.uploading": string;
+  "ocr.status": string;
+
   // common
   "common.fileSizeMB": string;
 }

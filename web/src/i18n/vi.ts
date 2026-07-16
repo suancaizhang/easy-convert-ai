@@ -151,6 +151,26 @@ const vi: TranslationKeys = {
   "api.uploadFailed": "Tải lên thất bại",
   "api.networkError": "Lỗi mạng",
 
+  // ocr page
+  "ocr.title": "OCR Hình ảnh / PDF",
+  "ocr.subtitle": "Hỗ trợ hình ảnh và PDF. Xuất ra Word, văn bản thuần hoặc PDF tìm kiếm được.",
+  "ocr.dropzone": "Kéo thả tệp vào đây, hoặc nhấp để chọn",
+  "ocr.dropzoneHint": "PDF, PNG, JPG, WebP (tối đa 20 MB)",
+  "ocr.outputFormat": "Định dạng đầu ra",
+  "ocr.formatDocx": "Tài liệu Word (.docx)",
+  "ocr.formatTxt": "Văn bản thuần (.txt)",
+  "ocr.formatSearchablePdf": "PDF tìm kiếm được",
+  "ocr.startConvert": "Bắt đầu OCR",
+  "ocr.converting": "Đang nhận dạng, vui lòng chờ...",
+  "ocr.done": "Nhận dạng hoàn tất!",
+  "ocr.download": "Tải tệp",
+  "ocr.continue": "Tiếp tục",
+  "ocr.retry": "Thử lại",
+  "ocr.loginRequired": "OCR yêu cầu đăng nhập. ",
+  "ocr.loginLink": "Đăng nhập",
+  "ocr.uploading": "Đang tải lên {progress}%",
+  "ocr.status": "Trạng thái: {status}",
+
   // common
   "common.fileSizeMB": "{size} MB",
 };

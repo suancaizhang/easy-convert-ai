@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import User
+from app.redis_client import redis_client
 
 router = APIRouter(prefix="/api/quota", tags=["quota"])
 
@@ -60,6 +61,31 @@ def refund_quota(db: Session, user: User) -> None:
         {"uid": user.id},
     )
     db.commit()
+
+
+GUEST_DAILY_LIMIT = 3
+
+
+def consume_quota(db: Session, user: User | None, request: Request) -> None:
+    """Deduct one quota unit for user or guest. Raises HTTPException on limit exceeded."""
+    if user:
+        if not try_consume_quota(db, user):
+            raise HTTPException(status_code=429, detail="今日配额已用完")
+    else:
+        client_ip = request.client.host if request.client else None
+        if not client_ip:
+            raise HTTPException(status_code=429, detail="无法识别客户端，请登录后使用")
+        guest_key = f"guest_quota:{client_ip}"
+        current = redis_client.get(guest_key)
+        if current and int(current) >= GUEST_DAILY_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail=f"游客每日限额 {GUEST_DAILY_LIMIT} 次，请注册获取更多次数",
+            )
+        pipe = redis_client.pipeline()
+        pipe.incr(guest_key)
+        pipe.expire(guest_key, 86400)
+        pipe.execute()
 
 
 @router.get("/status", response_model=QuotaStatusResponse)

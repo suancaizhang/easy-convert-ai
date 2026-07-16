@@ -151,6 +151,26 @@ const en: TranslationKeys = {
   "api.uploadFailed": "Upload failed",
   "api.networkError": "Network error",
 
+  // ocr page
+  "ocr.title": "Image / PDF OCR",
+  "ocr.subtitle": "Supports images and PDFs. Output as Word, plain text, or searchable PDF.",
+  "ocr.dropzone": "Drop file here, or click to select",
+  "ocr.dropzoneHint": "PDF, PNG, JPG, WebP (max 20 MB)",
+  "ocr.outputFormat": "Output format",
+  "ocr.formatDocx": "Word document (.docx)",
+  "ocr.formatTxt": "Plain text (.txt)",
+  "ocr.formatSearchablePdf": "Searchable PDF",
+  "ocr.startConvert": "Start OCR",
+  "ocr.converting": "Recognizing, please wait...",
+  "ocr.done": "Recognition complete!",
+  "ocr.download": "Download file",
+  "ocr.continue": "Convert another",
+  "ocr.retry": "Retry",
+  "ocr.loginRequired": "OCR requires an account. ",
+  "ocr.loginLink": "Sign in",
+  "ocr.uploading": "Uploading {progress}%",
+  "ocr.status": "Status: {status}",
+
   // common
   "common.fileSizeMB": "{size} MB",
 };

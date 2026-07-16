@@ -151,6 +151,26 @@ const id: TranslationKeys = {
   "api.uploadFailed": "Gagal mengunggah",
   "api.networkError": "Kesalahan jaringan",
 
+  // ocr page
+  "ocr.title": "OCR Gambar / PDF",
+  "ocr.subtitle": "Mendukung gambar dan PDF. Ekspor ke Word, teks biasa, atau PDF yang dapat dicari.",
+  "ocr.dropzone": "Seret file ke sini, atau klik untuk memilih",
+  "ocr.dropzoneHint": "PDF, PNG, JPG, WebP (maks 20 MB)",
+  "ocr.outputFormat": "Format keluaran",
+  "ocr.formatDocx": "Dokumen Word (.docx)",
+  "ocr.formatTxt": "Teks biasa (.txt)",
+  "ocr.formatSearchablePdf": "PDF yang dapat dicari",
+  "ocr.startConvert": "Mulai OCR",
+  "ocr.converting": "Mengenali, mohon tunggu...",
+  "ocr.done": "Pengenalan selesai!",
+  "ocr.download": "Unduh file",
+  "ocr.continue": "Konversi lain",
+  "ocr.retry": "Coba lagi",
+  "ocr.loginRequired": "OCR memerlukan akun. ",
+  "ocr.loginLink": "Masuk",
+  "ocr.uploading": "Mengunggah {progress}%",
+  "ocr.status": "Status: {status}",
+
   // common
   "common.fileSizeMB": "{size} MB",
 };

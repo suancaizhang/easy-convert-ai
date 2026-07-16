@@ -151,6 +151,26 @@ const ms: TranslationKeys = {
   "api.uploadFailed": "Muat naik gagal",
   "api.networkError": "Ralat rangkaian",
 
+  // ocr page
+  "ocr.title": "OCR Imej / PDF",
+  "ocr.subtitle": "Menyokong imej dan PDF. Output sebagai Word, teks biasa atau PDF boleh cari.",
+  "ocr.dropzone": "Seret fail ke sini, atau klik untuk pilih",
+  "ocr.dropzoneHint": "PDF, PNG, JPG, WebP (maks 20 MB)",
+  "ocr.outputFormat": "Format output",
+  "ocr.formatDocx": "Dokumen Word (.docx)",
+  "ocr.formatTxt": "Teks biasa (.txt)",
+  "ocr.formatSearchablePdf": "PDF boleh cari",
+  "ocr.startConvert": "Mula OCR",
+  "ocr.converting": "Mengenal pasti, sila tunggu...",
+  "ocr.done": "Pengenalan selesai!",
+  "ocr.download": "Muat turun fail",
+  "ocr.continue": "Tukar lain",
+  "ocr.retry": "Cuba semula",
+  "ocr.loginRequired": "OCR memerlukan akaun. ",
+  "ocr.loginLink": "Log masuk",
+  "ocr.uploading": "Memuat naik {progress}%",
+  "ocr.status": "Status: {status}",
+
   // common
   "common.fileSizeMB": "{size} MB",
 };

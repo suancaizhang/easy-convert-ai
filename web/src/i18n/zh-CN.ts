@@ -151,6 +151,26 @@ const zhCN: TranslationKeys = {
   "api.uploadFailed": "上传失败",
   "api.networkError": "网络错误",
 
+  // ocr page
+  "ocr.title": "图片/PDF 文字识别（OCR）",
+  "ocr.subtitle": "支持图片和 PDF，输出 Word、纯文本或可搜索 PDF",
+  "ocr.dropzone": "拖拽文件到此处，或点击选择",
+  "ocr.dropzoneHint": "支持 PDF、PNG、JPG、WebP（最大 20MB）",
+  "ocr.outputFormat": "输出格式",
+  "ocr.formatDocx": "Word 文档 (.docx)",
+  "ocr.formatTxt": "纯文本 (.txt)",
+  "ocr.formatSearchablePdf": "可搜索 PDF",
+  "ocr.startConvert": "开始识别",
+  "ocr.converting": "识别中，请稍候...",
+  "ocr.done": "识别完成！",
+  "ocr.download": "下载文件",
+  "ocr.continue": "继续识别",
+  "ocr.retry": "重试",
+  "ocr.loginRequired": "OCR 识别需要登录，",
+  "ocr.loginLink": "立即登录",
+  "ocr.uploading": "上传中 {progress}%",
+  "ocr.status": "状态：{status}",
+
   // common
   "common.fileSizeMB": "{size} MB",
 };

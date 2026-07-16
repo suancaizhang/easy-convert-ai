@@ -1,6 +1,9 @@
-"""OCR 图片转 Word 文档转换器
+"""OCR 图片转文档转换器
 
-使用 PaddleOCR-VL-1.6 云服务进行 OCR，将结果 markdown 转为 docx。
+使用 PaddleOCR-VL-1.6 云服务进行 OCR，支持三种输出格式：
+- docx（默认）：将结果 markdown 转为 Word 文档
+- txt：将识别文本按页拼接写入纯文本文件
+- searchable_pdf：在原始 PDF/图片上叠加隐形文字层
 """
 
 import io
@@ -10,9 +13,11 @@ import uuid
 import logging
 
 import httpx
+import fitz  # PyMuPDF
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from PIL import Image
 
 from worker.converters import ConvertResult, DocumentConverter, OutputFormat
 from worker.services.paddle_vl import PaddleVLService, OcrPage
@@ -29,13 +34,13 @@ class OcrToWordConverter(DocumentConverter):
     def output_format(self) -> OutputFormat:
         return OutputFormat.DOCX
 
-    def convert(self, input_path: str, output_dir: str, **kwargs) -> ConvertResult:
+    def convert(self, input_path: str, output_dir: str, params: dict | None = None) -> ConvertResult:
         """执行 OCR 转换。
 
         Args:
             input_path: 输入图片/PDF 文件路径
             output_dir: 输出目录
-            **kwargs: 向后兼容（接受旧的 ocr_mode 参数但忽略）
+            params: 可选参数，支持 output_format: "docx" | "txt" | "searchable_pdf"
 
         Returns:
             ConvertResult
@@ -44,24 +49,31 @@ class OcrToWordConverter(DocumentConverter):
         if not token:
             raise ValueError("PADDLE_OCR_TOKEN not configured")
 
+        output_format = (params or {}).get("output_format", "docx")
+
         service = PaddleVLService(token=token)
         result = service.ocr_file(input_path)
 
         if not result.pages:
             raise RuntimeError("OCR returned no results")
 
-        doc = Document()
+        if output_format == "txt":
+            return self._build_txt(result, output_dir)
+        elif output_format == "searchable_pdf":
+            return self._build_searchable_pdf(input_path, result, output_dir)
+        else:
+            return self._build_docx(result, output_dir)
 
+    def _build_docx(self, result, output_dir: str) -> ConvertResult:
+        doc = Document()
         for i, page in enumerate(result.pages):
             self._write_page_to_doc(doc, page, output_dir)
             if i < len(result.pages) - 1:
                 doc.add_page_break()
 
-        output_name = f"{uuid.uuid4()}.docx"
-        output_path = os.path.join(output_dir, output_name)
+        output_path = os.path.join(output_dir, f"{uuid.uuid4()}.docx")
         doc.save(output_path)
 
-        # 清理临时图片
         for f in os.listdir(output_dir):
             if f.startswith("_ocr_img_"):
                 try:
@@ -69,10 +81,82 @@ class OcrToWordConverter(DocumentConverter):
                 except OSError:
                     pass
 
-        file_size = os.path.getsize(output_path)
         return ConvertResult(
             output_path=output_path,
-            file_size=file_size,
+            file_size=os.path.getsize(output_path),
+            page_count=result.total_pages,
+            metadata={"engine": "paddle-vl-1.6"},
+        )
+
+    def _build_txt(self, result, output_dir: str) -> ConvertResult:
+        parts = []
+        for i, page in enumerate(result.pages):
+            if result.total_pages > 1:
+                parts.append(f"--- Page {i + 1} ---")
+            parts.append(page.markdown_text)
+
+        text = "\n\n".join(parts)
+        output_path = os.path.join(output_dir, f"{uuid.uuid4()}.txt")
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(text)
+
+        return ConvertResult(
+            output_path=output_path,
+            file_size=os.path.getsize(output_path),
+            page_count=result.total_pages,
+            metadata={"engine": "paddle-vl-1.6"},
+        )
+
+    def _build_searchable_pdf(self, input_path: str, result, output_dir: str) -> ConvertResult:
+        ext = os.path.splitext(input_path)[1].lower()
+
+        if ext == ".pdf":
+            pdf_doc = fitz.open(input_path)
+        else:
+            # 图片先转为单页 PDF
+            img = Image.open(input_path).convert("RGB")
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format="PDF")
+            img_bytes.seek(0)
+            pdf_doc = fitz.open(stream=img_bytes.read(), filetype="pdf")
+
+        for page_idx, page in enumerate(result.pages):
+            if page_idx >= len(pdf_doc):
+                break
+            pdf_page = pdf_doc[page_idx]
+            page_height = pdf_page.rect.height
+
+            # 提取纯文本行，按位置估算坐标
+            lines = [l.strip() for l in page.markdown_text.split("\n") if l.strip()]
+            if not lines:
+                continue
+
+            line_height = page_height / max(len(lines), 1)
+            for line_idx, line in enumerate(lines):
+                # 去除 markdown 标记
+                clean = re.sub(r"^#{1,6}\s+", "", line)
+                clean = re.sub(r"\*\*(.+?)\*\*", r"\1", clean)
+                clean = re.sub(r"\*(.+?)\*", r"\1", clean)
+                clean = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", clean).strip()
+                if not clean:
+                    continue
+
+                y = line_idx * line_height + line_height * 0.8
+                # render_mode=3 → 隐形文字（不可见但可选中/复制/搜索）
+                pdf_page.insert_text(
+                    fitz.Point(0, y),
+                    clean,
+                    fontsize=line_height * 0.7,
+                    render_mode=3,
+                )
+
+        output_path = os.path.join(output_dir, f"{uuid.uuid4()}.pdf")
+        pdf_doc.save(output_path)
+        pdf_doc.close()
+
+        return ConvertResult(
+            output_path=output_path,
+            file_size=os.path.getsize(output_path),
             page_count=result.total_pages,
             metadata={"engine": "paddle-vl-1.6"},
         )

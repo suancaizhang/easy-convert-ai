@@ -24,7 +24,7 @@ export default function Home() {
     { label: "home.wordToPdf", href: "/convert?taskType=word_to_pdf", icon: "📝" },
     { label: "home.imagesToPdf", href: "/convert?taskType=images_to_pdf", icon: "🖼" },
     { label: "home.mergeImages", href: "/merge-images", icon: "📑" },
-    { label: "home.ocrToWord", href: "/convert?taskType=ocr_to_word", icon: "🤖" },
+    { label: "home.ocrToWord", href: "/tools/ocr", icon: "🤖" },
     { label: "home.excelToPdf", href: "/convert?taskType=excel_to_pdf", icon: "📊" },
     { label: "home.pptToPdf", href: "/convert?taskType=ppt_to_pdf", icon: "📽" },
   ];

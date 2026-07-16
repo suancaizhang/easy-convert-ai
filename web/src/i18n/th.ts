@@ -151,6 +151,26 @@ const th: TranslationKeys = {
   "api.uploadFailed": "อัปโหลดไม่สำเร็จ",
   "api.networkError": "ข้อผิดพลาดเครือข่าย",
 
+  // ocr page
+  "ocr.title": "OCR รูปภาพ / PDF",
+  "ocr.subtitle": "รองรับรูปภาพและ PDF ส่งออกเป็น Word ข้อความธรรมดา หรือ PDF ที่ค้นหาได้",
+  "ocr.dropzone": "วางไฟล์ที่นี่ หรือคลิกเพื่อเลือก",
+  "ocr.dropzoneHint": "PDF, PNG, JPG, WebP (สูงสุด 20 MB)",
+  "ocr.outputFormat": "รูปแบบผลลัพธ์",
+  "ocr.formatDocx": "เอกสาร Word (.docx)",
+  "ocr.formatTxt": "ข้อความธรรมดา (.txt)",
+  "ocr.formatSearchablePdf": "PDF ที่ค้นหาได้",
+  "ocr.startConvert": "เริ่ม OCR",
+  "ocr.converting": "กำลังรู้จำ กรุณารอ...",
+  "ocr.done": "รู้จำเสร็จแล้ว!",
+  "ocr.download": "ดาวน์โหลดไฟล์",
+  "ocr.continue": "แปลงต่อ",
+  "ocr.retry": "ลองใหม่",
+  "ocr.loginRequired": "OCR ต้องเข้าสู่ระบบ ",
+  "ocr.loginLink": "เข้าสู่ระบบ",
+  "ocr.uploading": "กำลังอัปโหลด {progress}%",
+  "ocr.status": "สถานะ: {status}",
+
   // common
   "common.fileSizeMB": "{size} MB",
 };

@@ -151,6 +151,26 @@ const fil: TranslationKeys = {
   "api.uploadFailed": "Nabigo ang upload",
   "api.networkError": "Error sa network",
 
+  // ocr page
+  "ocr.title": "OCR ng Larawan / PDF",
+  "ocr.subtitle": "Sinusuportahan ang mga larawan at PDF. I-export bilang Word, plain text, o searchable PDF.",
+  "ocr.dropzone": "I-drag ang file dito, o i-click para pumili",
+  "ocr.dropzoneHint": "PDF, PNG, JPG, WebP (max 20 MB)",
+  "ocr.outputFormat": "Format ng output",
+  "ocr.formatDocx": "Word document (.docx)",
+  "ocr.formatTxt": "Plain text (.txt)",
+  "ocr.formatSearchablePdf": "Searchable PDF",
+  "ocr.startConvert": "Simulan ang OCR",
+  "ocr.converting": "Kinikilala, pakihintay...",
+  "ocr.done": "Tapos na ang pagkilala!",
+  "ocr.download": "I-download ang file",
+  "ocr.continue": "Mag-convert pa",
+  "ocr.retry": "Subukan ulit",
+  "ocr.loginRequired": "Kailangan ng account para sa OCR. ",
+  "ocr.loginLink": "Mag-sign in",
+  "ocr.uploading": "Ina-upload {progress}%",
+  "ocr.status": "Status: {status}",
+
   // common
   "common.fileSizeMB": "{size} MB",
 };
