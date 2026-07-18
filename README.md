@@ -230,6 +230,12 @@ npm run dev
    (数据库)        (缓存/队列)    (FastAPI)        (转换任务)     (Next.js)
 ```
 
+### cloudflared tunnel远程
+
+cloudflared.exe tunnel --url http://localhost:3000
+cloudflared.exe tunnel --url http://localhost:8111
+$env:NEXT_PUBLIC_API_URL="https://happened-blanket-folks-patterns.trycloudflare.com"; npm run dev
+
 ### 调试技巧
 
 **API 调试**：

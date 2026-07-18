@@ -46,5 +46,6 @@ class Task(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     error_code: Mapped[str | None] = mapped_column(String(20))
     source_document_ids: Mapped[list | None] = mapped_column(JSONB)
+    params: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

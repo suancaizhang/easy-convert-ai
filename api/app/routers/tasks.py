@@ -289,3 +289,85 @@ def download_result(
     download_name = f"{base_name}_converted.{ext}"
 
     return FileResponse(file_path, filename=download_name)
+
+
+@router.get("/{task_id}/pages")
+def get_task_pages(
+    task_id: str,
+    current_user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """返回任务结果的总页数和文件类型（用于多页图片预览）"""
+    task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    document = db.query(Document).filter(Document.id == task.document_id).first()
+    if document and document.user_id and current_user:
+        if document.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="无权访问此任务")
+
+    if task.status != "success":
+        raise HTTPException(status_code=400, detail="任务尚未完成")
+    if not task.result_path:
+        raise HTTPException(status_code=404, detail="结果文件不存在")
+
+    paths = [p.strip() for p in task.result_path.split(",") if p.strip()]
+    ext = paths[0].rsplit(".", 1)[-1].lower() if paths else ""
+
+    return {"total": len(paths), "ext": ext}
+
+
+@router.get("/{task_id}/download/{page_index}")
+def download_page(
+    task_id: str,
+    page_index: int,
+    preview: bool = Query(False),
+    current_user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """按页码索引下载多页结果中的单个文件"""
+    task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    document = db.query(Document).filter(Document.id == task.document_id).first()
+    if document and document.user_id and current_user:
+        if document.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="无权下载此文件")
+
+    if task.status != "success":
+        raise HTTPException(status_code=400, detail="任务尚未完成")
+    if not task.result_path:
+        raise HTTPException(status_code=404, detail="结果文件不存在")
+
+    paths = [p.strip() for p in task.result_path.split(",") if p.strip()]
+
+    if page_index < 0 or page_index >= len(paths):
+        raise HTTPException(status_code=400, detail=f"页码超出范围，共 {len(paths)} 页")
+
+    file_path = paths[page_index]
+
+    if not _validate_result_path(file_path):
+        raise HTTPException(status_code=403, detail="非法文件路径")
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="结果文件已过期或不存在")
+
+    ext = file_path.rsplit(".", 1)[-1].lower()
+
+    if preview:
+        media_type_map = {
+            "pdf": "application/pdf",
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "webp": "image/webp",
+        }
+        media_type = media_type_map.get(ext, "application/octet-stream")
+        return FileResponse(file_path, media_type=media_type, headers={"Content-Disposition": "inline"})
+
+    base_name = document.filename.rsplit(".", 1)[0] if document else "result"
+    download_name = f"{base_name}_page{page_index + 1}.{ext}"
+
+    return FileResponse(file_path, filename=download_name)

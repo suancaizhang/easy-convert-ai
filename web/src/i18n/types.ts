@@ -190,6 +190,37 @@ export interface TranslationKeys {
   "ocr.loginLink": string;
   "ocr.uploading": string;
   "ocr.status": string;
+  "ocr.preview": string;
+
+  // preview
+  "preview.title": string;
+  "preview.close": string;
+  "preview.page": string;
+  "preview.zoomIn": string;
+  "preview.zoomOut": string;
+  "preview.loading": string;
+  "preview.loadFailed": string;
+
+  // convert docx preview
+  "convert.previewDocx": string;
+
+  // images-to-pdf
+  "imagesToPdf.title": string;
+  "imagesToPdf.subtitle": string;
+  "imagesToPdf.dropzone": string;
+  "imagesToPdf.dropzoneHint": string;
+  "imagesToPdf.selected": string;
+  "imagesToPdf.startMerge": string;
+  "imagesToPdf.merging": string;
+  "imagesToPdf.done": string;
+  "imagesToPdf.previewPdf": string;
+  "imagesToPdf.downloadPdf": string;
+  "imagesToPdf.continue": string;
+  "imagesToPdf.retry": string;
+  "imagesToPdf.needAtLeast2": string;
+  "imagesToPdf.maxExceeded": string;
+  "imagesToPdf.unsupportedFormat": string;
+  "imagesToPdf.fileTooLarge": string;
 
   // common
   "common.fileSizeMB": string;

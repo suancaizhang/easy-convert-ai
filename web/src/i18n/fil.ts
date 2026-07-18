@@ -192,6 +192,37 @@ const fil: TranslationKeys = {
   "ocr.loginLink": "Mag-sign in",
   "ocr.uploading": "Ina-upload {progress}%",
   "ocr.status": "Status: {status}",
+  "ocr.preview": "I-preview ang Dokumento",
+
+  // preview
+  "preview.title": "Preview ng File",
+  "preview.close": "Isara",
+  "preview.page": "Pahina {current} / {total}",
+  "preview.zoomIn": "Palakihin",
+  "preview.zoomOut": "Paliitin",
+  "preview.loading": "Naglo-load...",
+  "preview.loadFailed": "Hindi na-load, pakisubukan muli",
+
+  // convert docx preview
+  "convert.previewDocx": "I-preview ang Dokumento",
+
+  // images-to-pdf
+  "imagesToPdf.title": "Pagsamahin ang mga Larawan sa PDF",
+  "imagesToPdf.subtitle": "Pumili ng 2-20 larawan, i-drag para ayusin, pagkatapos pagsamahin sa isang PDF",
+  "imagesToPdf.dropzone": "I-click o i-drag ang mga larawan dito",
+  "imagesToPdf.dropzoneHint": "PNG, JPG, WebP, max 20MB bawat isa, hanggang 20 larawan",
+  "imagesToPdf.selected": "{count} napili (i-drag para ayusin)",
+  "imagesToPdf.startMerge": "Simulan ang Pagsama ({count} larawan)",
+  "imagesToPdf.merging": "Pinagsasama, mangyaring maghintay...",
+  "imagesToPdf.done": "Tapos na ang pagsasama!",
+  "imagesToPdf.previewPdf": "I-preview ang PDF",
+  "imagesToPdf.downloadPdf": "I-download ang PDF",
+  "imagesToPdf.continue": "Magpatuloy",
+  "imagesToPdf.retry": "Subukan muli",
+  "imagesToPdf.needAtLeast2": "Kailangan ng hindi bababa sa 2 larawan",
+  "imagesToPdf.maxExceeded": "Maximum {max} larawan, hindi kasama ang sobra",
+  "imagesToPdf.unsupportedFormat": "PNG, JPG, WebP lang ang sinusuportahan",
+  "imagesToPdf.fileTooLarge": "Lumampas ang {name} sa 20MB na limitasyon",
 
   // common
   "common.fileSizeMB": "{size} MB",

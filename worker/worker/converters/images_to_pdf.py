@@ -15,7 +15,7 @@ class ImagesToPdfConverter(DocumentConverter):
     def output_format(self) -> OutputFormat:
         return OutputFormat.PDF
 
-    def convert(self, input_path: str, output_dir: str) -> ConvertResult:
+    def convert(self, input_path: str, output_dir: str, params: dict | None = None) -> ConvertResult:
         # input_path is a comma-separated list of image paths, or a single path
         if "," in input_path:
             image_paths = [p.strip() for p in input_path.split(",")]

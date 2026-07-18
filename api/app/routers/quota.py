@@ -63,7 +63,7 @@ def refund_quota(db: Session, user: User) -> None:
     db.commit()
 
 
-GUEST_DAILY_LIMIT = 3
+GUEST_DAILY_LIMIT = 999  # TODO: 测试期间放开，上线前改回 3
 
 
 def consume_quota(db: Session, user: User | None, request: Request) -> None:
@@ -72,6 +72,8 @@ def consume_quota(db: Session, user: User | None, request: Request) -> None:
         if not try_consume_quota(db, user):
             raise HTTPException(status_code=429, detail="今日配额已用完")
     else:
+        # TODO: 测试期间跳过游客限额检查，上线前恢复
+        return
         client_ip = request.client.host if request.client else None
         if not client_ip:
             raise HTTPException(status_code=429, detail="无法识别客户端，请登录后使用")

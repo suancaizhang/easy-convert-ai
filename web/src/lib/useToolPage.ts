@@ -24,9 +24,11 @@ export interface UseToolPageOptions {
 export interface UseToolPageReturn extends ToolPageState {
   uploadAndRun: (files: File[], params?: Record<string, unknown>) => Promise<void>;
   download: () => Promise<void>;
-  preview: () => Promise<void>;
+  preview: () => void;
   reset: () => void;
   taskId: string;
+  showPreview: boolean;
+  closePreview: () => void;
 }
 
 export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions): UseToolPageReturn {
@@ -35,6 +37,7 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
   const [taskStatus, setTaskStatus] = useState("");
   const [error, setError] = useState("");
   const [taskId, setTaskId] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopPolling = () => {
@@ -159,13 +162,13 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
     }
   }, [fetchResult]);
 
-  const preview = useCallback(async () => {
-    try {
-      await fetchResult(true);
-    } catch {
-      setError("预览失败，请重试");
-    }
-  }, [fetchResult]);
+  const preview = useCallback(() => {
+    setShowPreview(true);
+  }, []);
+
+  const closePreview = useCallback(() => {
+    setShowPreview(false);
+  }, []);
 
   const reset = useCallback(() => {
     stopPolling();
@@ -174,7 +177,8 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
     setTaskStatus("");
     setError("");
     setTaskId("");
+    setShowPreview(false);
   }, []);
 
-  return { stage, uploadProgress, taskStatus, error, taskId, uploadAndRun, download, preview, reset };
+  return { stage, uploadProgress, taskStatus, error, taskId, showPreview, uploadAndRun, download, preview, closePreview, reset };
 }

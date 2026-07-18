@@ -192,6 +192,37 @@ const zhCN: TranslationKeys = {
   "ocr.loginLink": "立即登录",
   "ocr.uploading": "上传中 {progress}%",
   "ocr.status": "状态：{status}",
+  "ocr.preview": "预览文档",
+
+  // preview
+  "preview.title": "文件预览",
+  "preview.close": "关闭",
+  "preview.page": "第 {current} / {total} 页",
+  "preview.zoomIn": "放大",
+  "preview.zoomOut": "缩小",
+  "preview.loading": "加载中...",
+  "preview.loadFailed": "加载失败，请重试",
+
+  // convert docx preview
+  "convert.previewDocx": "预览文档",
+
+  // images-to-pdf
+  "imagesToPdf.title": "多图合并为 PDF",
+  "imagesToPdf.subtitle": "选择 2-20 张图片，拖拽排序后合并为一个 PDF",
+  "imagesToPdf.dropzone": "点击或拖拽图片到此处",
+  "imagesToPdf.dropzoneHint": "PNG、JPG、WebP，每张最大 20MB，最多 20 张",
+  "imagesToPdf.selected": "已选 {count} 张（拖拽排序）",
+  "imagesToPdf.startMerge": "开始合并（{count} 张）",
+  "imagesToPdf.merging": "合并中，请稍候...",
+  "imagesToPdf.done": "合并完成！",
+  "imagesToPdf.previewPdf": "预览 PDF",
+  "imagesToPdf.downloadPdf": "下载 PDF",
+  "imagesToPdf.continue": "继续合并",
+  "imagesToPdf.retry": "重试",
+  "imagesToPdf.needAtLeast2": "至少需要 2 张图片",
+  "imagesToPdf.maxExceeded": "最多 {max} 张，已忽略超出部分",
+  "imagesToPdf.unsupportedFormat": "仅支持 PNG、JPG、WebP 格式",
+  "imagesToPdf.fileTooLarge": "{name} 超过 20MB 限制",
 
   // common
   "common.fileSizeMB": "{size} MB",

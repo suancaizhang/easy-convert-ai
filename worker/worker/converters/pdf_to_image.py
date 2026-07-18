@@ -17,7 +17,7 @@ class PdfToImageConverter(DocumentConverter):
     def output_format(self) -> OutputFormat:
         return OutputFormat.PNG
 
-    def convert(self, input_path: str, output_dir: str) -> ConvertResult:
+    def convert(self, input_path: str, output_dir: str, params: dict | None = None) -> ConvertResult:
         pdf = fitz.open(input_path)
 
         if len(pdf) > MAX_PAGES:

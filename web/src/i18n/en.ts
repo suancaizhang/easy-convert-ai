@@ -192,6 +192,37 @@ const en: TranslationKeys = {
   "ocr.loginLink": "Sign in",
   "ocr.uploading": "Uploading {progress}%",
   "ocr.status": "Status: {status}",
+  "ocr.preview": "Preview Document",
+
+  // preview
+  "preview.title": "File Preview",
+  "preview.close": "Close",
+  "preview.page": "Page {current} / {total}",
+  "preview.zoomIn": "Zoom in",
+  "preview.zoomOut": "Zoom out",
+  "preview.loading": "Loading...",
+  "preview.loadFailed": "Failed to load, please retry",
+
+  // convert docx preview
+  "convert.previewDocx": "Preview Document",
+
+  // images-to-pdf
+  "imagesToPdf.title": "Merge Images to PDF",
+  "imagesToPdf.subtitle": "Select 2-20 images, drag to reorder, then merge into one PDF",
+  "imagesToPdf.dropzone": "Click or drag images here",
+  "imagesToPdf.dropzoneHint": "PNG, JPG, WebP, max 20MB each, up to 20 images",
+  "imagesToPdf.selected": "{count} selected (drag to reorder)",
+  "imagesToPdf.startMerge": "Start Merge ({count} images)",
+  "imagesToPdf.merging": "Merging, please wait...",
+  "imagesToPdf.done": "Merge complete!",
+  "imagesToPdf.previewPdf": "Preview PDF",
+  "imagesToPdf.downloadPdf": "Download PDF",
+  "imagesToPdf.continue": "Continue",
+  "imagesToPdf.retry": "Retry",
+  "imagesToPdf.needAtLeast2": "At least 2 images required",
+  "imagesToPdf.maxExceeded": "Max {max} images, extras ignored",
+  "imagesToPdf.unsupportedFormat": "Only PNG, JPG, WebP supported",
+  "imagesToPdf.fileTooLarge": "{name} exceeds 20MB limit",
 
   // common
   "common.fileSizeMB": "{size} MB",

@@ -192,6 +192,37 @@ const ms: TranslationKeys = {
   "ocr.loginLink": "Log masuk",
   "ocr.uploading": "Memuat naik {progress}%",
   "ocr.status": "Status: {status}",
+  "ocr.preview": "Pratonton Dokumen",
+
+  // preview
+  "preview.title": "Pratonton Fail",
+  "preview.close": "Tutup",
+  "preview.page": "Halaman {current} / {total}",
+  "preview.zoomIn": "Zum masuk",
+  "preview.zoomOut": "Zum keluar",
+  "preview.loading": "Memuatkan...",
+  "preview.loadFailed": "Gagal memuat, sila cuba lagi",
+
+  // convert docx preview
+  "convert.previewDocx": "Pratonton Dokumen",
+
+  // images-to-pdf
+  "imagesToPdf.title": "Gabung Imej ke PDF",
+  "imagesToPdf.subtitle": "Pilih 2-20 imej, seret untuk susun, kemudian gabung menjadi PDF",
+  "imagesToPdf.dropzone": "Klik atau seret imej ke sini",
+  "imagesToPdf.dropzoneHint": "PNG, JPG, WebP, maks 20MB setiap satu, sehingga 20 imej",
+  "imagesToPdf.selected": "{count} dipilih (seret untuk susun)",
+  "imagesToPdf.startMerge": "Mula Gabung ({count} imej)",
+  "imagesToPdf.merging": "Sedang menggabung, sila tunggu...",
+  "imagesToPdf.done": "Penggabungan selesai!",
+  "imagesToPdf.previewPdf": "Pratonton PDF",
+  "imagesToPdf.downloadPdf": "Muat turun PDF",
+  "imagesToPdf.continue": "Teruskan",
+  "imagesToPdf.retry": "Cuba lagi",
+  "imagesToPdf.needAtLeast2": "Sekurang-kurangnya 2 imej diperlukan",
+  "imagesToPdf.maxExceeded": "Maksimum {max} imej, lebihan diabaikan",
+  "imagesToPdf.unsupportedFormat": "Hanya menyokong PNG, JPG, WebP",
+  "imagesToPdf.fileTooLarge": "{name} melebihi had 20MB",
 
   // common
   "common.fileSizeMB": "{size} MB",

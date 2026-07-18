@@ -192,6 +192,37 @@ const vi: TranslationKeys = {
   "ocr.loginLink": "Đăng nhập",
   "ocr.uploading": "Đang tải lên {progress}%",
   "ocr.status": "Trạng thái: {status}",
+  "ocr.preview": "Xem trước tài liệu",
+
+  // preview
+  "preview.title": "Xem trước tệp",
+  "preview.close": "Đóng",
+  "preview.page": "Trang {current} / {total}",
+  "preview.zoomIn": "Phóng to",
+  "preview.zoomOut": "Thu nhỏ",
+  "preview.loading": "Đang tải...",
+  "preview.loadFailed": "Tải thất bại, vui lòng thử lại",
+
+  // convert docx preview
+  "convert.previewDocx": "Xem trước tài liệu",
+
+  // images-to-pdf
+  "imagesToPdf.title": "Ghép ảnh thành PDF",
+  "imagesToPdf.subtitle": "Chọn 2-20 ảnh, kéo để sắp xếp, sau đó ghép thành PDF",
+  "imagesToPdf.dropzone": "Nhấp hoặc kéo ảnh vào đây",
+  "imagesToPdf.dropzoneHint": "PNG, JPG, WebP, tối đa 20MB mỗi ảnh, tối đa 20 ảnh",
+  "imagesToPdf.selected": "Đã chọn {count} ảnh (kéo để sắp xếp)",
+  "imagesToPdf.startMerge": "Bắt đầu ghép ({count} ảnh)",
+  "imagesToPdf.merging": "Đang ghép, vui lòng đợi...",
+  "imagesToPdf.done": "Ghép hoàn tất!",
+  "imagesToPdf.previewPdf": "Xem trước PDF",
+  "imagesToPdf.downloadPdf": "Tải PDF",
+  "imagesToPdf.continue": "Tiếp tục",
+  "imagesToPdf.retry": "Thử lại",
+  "imagesToPdf.needAtLeast2": "Cần ít nhất 2 ảnh",
+  "imagesToPdf.maxExceeded": "Tối đa {max} ảnh, phần thừa bị bỏ qua",
+  "imagesToPdf.unsupportedFormat": "Chỉ hỗ trợ PNG, JPG, WebP",
+  "imagesToPdf.fileTooLarge": "{name} vượt quá giới hạn 20MB",
 
   // common
   "common.fileSizeMB": "{size} MB",

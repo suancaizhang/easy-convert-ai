@@ -192,6 +192,37 @@ const th: TranslationKeys = {
   "ocr.loginLink": "เข้าสู่ระบบ",
   "ocr.uploading": "กำลังอัปโหลด {progress}%",
   "ocr.status": "สถานะ: {status}",
+  "ocr.preview": "ดูตัวอย่างเอกสาร",
+
+  // preview
+  "preview.title": "ดูตัวอย่างไฟล์",
+  "preview.close": "ปิด",
+  "preview.page": "หน้า {current} / {total}",
+  "preview.zoomIn": "ขยาย",
+  "preview.zoomOut": "ย่อ",
+  "preview.loading": "กำลังโหลด...",
+  "preview.loadFailed": "โหลดไม่สำเร็จ กรุณาลองใหม่",
+
+  // convert docx preview
+  "convert.previewDocx": "ดูตัวอย่างเอกสาร",
+
+  // images-to-pdf
+  "imagesToPdf.title": "รวมรูปภาพเป็น PDF",
+  "imagesToPdf.subtitle": "เลือก 2-20 รูป ลากเพื่อจัดเรียง แล้วรวมเป็น PDF",
+  "imagesToPdf.dropzone": "คลิกหรือลากรูปภาพมาที่นี่",
+  "imagesToPdf.dropzoneHint": "PNG, JPG, WebP สูงสุด 20MB ต่อรูป ได้ถึง 20 รูป",
+  "imagesToPdf.selected": "เลือกแล้ว {count} รูป (ลากเพื่อจัดเรียง)",
+  "imagesToPdf.startMerge": "เริ่มรวม ({count} รูป)",
+  "imagesToPdf.merging": "กำลังรวม โปรดรอ...",
+  "imagesToPdf.done": "รวมเสร็จแล้ว!",
+  "imagesToPdf.previewPdf": "ดูตัวอย่าง PDF",
+  "imagesToPdf.downloadPdf": "ดาวน์โหลด PDF",
+  "imagesToPdf.continue": "ทำต่อ",
+  "imagesToPdf.retry": "ลองใหม่",
+  "imagesToPdf.needAtLeast2": "ต้องมีอย่างน้อย 2 รูป",
+  "imagesToPdf.maxExceeded": "สูงสุด {max} รูป ส่วนเกินถูกละเว้น",
+  "imagesToPdf.unsupportedFormat": "รองรับเฉพาะ PNG, JPG, WebP",
+  "imagesToPdf.fileTooLarge": "{name} เกิน 20MB",
 
   // common
   "common.fileSizeMB": "{size} MB",
