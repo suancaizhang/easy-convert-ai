@@ -7,7 +7,7 @@ AI 驱动的在线文档转换平台，支持 PDF、Office 文件与图片转换
 - [全项目审查、整改状态与验证证据](docs/issues/04-project-audit-2026-09-12.md)：严重问题修复、回归结果和未关闭风险。
 - [部署、迁移与故障恢复](DEPLOYMENT.md)：Docker/WSL 配置、六服务启动、004 迁移及回退要求。
 - [任务归属、持久化投递与产物列表](docs/adr/0004-task-ownership-delivery-and-artifacts.md)：权限、计费、派发和恢复契约。
-- [多文件主文档决策](docs/adr/0001-multi-file-task-document-id-anchor.md)、[OCR 输出格式决策](docs/adr/0002-ocr-single-task-type-with-output-format-param.md)、[游客使用策略](docs/adr/0003-guest-unrestricted-except-ocr.md)。
+- [多文件主文档决策](docs/adr/0001-multi-file-task-document-id-anchor.md)、[OCR 输出格式决策](docs/adr/0002-ocr-single-task-type-with-output-format-param.md)、[游客使用策略](docs/adr/0003-guest-unrestricted-except-ocr.md)、[微信小程序参赛端决策](docs/adr/0005-wechat-miniprogram-contest-entry.md)。
 
 2026-09-12 整改验证：API/Worker生命周期与迁移20项、转换完整性10项、前端15项测试通过；Node20.19生产构建通过；npm生产依赖审计未报告漏洞。真实分进程转换与桌面/移动浏览器预览已验证。**完整Docker部署、收费云OCR和Python依赖漏洞审计尚未完成，不代表已获上线批准。** 详细环境与证据边界以审查记录为准。
 
@@ -21,12 +21,14 @@ AI 驱动的在线文档转换平台，支持 PDF、Office 文件与图片转换
 - 游客非OCR不限次数；OCR必须登录。私有来源与任务均校验权限，提供无效认证不能降级为游客绕过检查。
 - 历史页支持分页和删除，但部分工具类型识别、OCR格式预览及分页边界仍待修复。
 - 删除成功返回204；活动任务引用的文档返回409。删除主文档会删除其任务记录并尝试清理源文件及产物；物理清理失败不会回滚数据库，也没有自动过期清理。
+- 微信小程序端（`miniprogram/`，2026 大赛参赛版，ADR0005）：Taro3+React 独立安装根，覆盖 12 类转换全流程；`wx.login` → `POST /api/auth/wechat/login` 用 code 换 openid 签发同一 JWT，微信用户 `email`/`password_hash` 为 NULL，OCR 登录约束与配额仍由 API 强制。未配置 `WECHAT_APPID`/`WECHAT_SECRET` 时微信登录返回 503。
 
 ## 技术栈与架构
 
 |层|技术|
 |---|---|
 |前端|Next.js15、React19、TypeScript、Tailwind CSS|
+|小程序|Taro3、React18、TypeScript（weapp 目标，独立安装根 `miniprogram/`）|
 |API|FastAPI、同步SQLAlchemy2.0 Session、Alembic|
 |执行|Celery5.4，default/office双队列；Office转换路由至office|
 |存储|PostgreSQL16、Redis、本地共享文件目录|
@@ -34,12 +36,12 @@ AI 驱动的在线文档转换平台，支持 PDF、Office 文件与图片转换
 |部署|Docker Compose：web、api、dispatcher、worker、postgres、redis|
 
 ```text
-浏览器 → FastAPI → PostgreSQL（同事务扣额并创建waiting任务）
-                      ↓ dispatcher读取未派发意图
-                    Redis → Celery Worker
-                                ├─ 写入共享RESULT_DIR
-                                └─ 更新PostgreSQL状态与result_paths
-浏览器 → FastAPI → 查询状态 / 从共享目录下载结果
+浏览器/小程序 → FastAPI → PostgreSQL（同事务扣额并创建waiting任务）
+                              ↓ dispatcher读取未派发意图
+                            Redis → Celery Worker
+                                        ├─ 写入共享RESULT_DIR
+                                        └─ 更新PostgreSQL状态与result_paths
+浏览器/小程序 → FastAPI → 查询状态 / 从共享目录下载结果
 ```
 
 - `Task.user_id` 显式记录新任务创建者，不借主文档推断计费主体。
@@ -116,6 +118,17 @@ npm run dev
 
 修改API端口时更新前端环境变量，不修改代码默认值。开发模式重启服务，生产模式重新构建。
 
+### 小程序（`miniprogram/`，Windows PowerShell）
+
+```powershell
+Set-Location miniprogram
+npm install
+$env:TARO_APP_API_BASE = 'http://localhost:8111'
+npm run dev:weapp   # watch构建；产物 miniprogram/dist 由微信开发者工具导入
+```
+
+`TARO_APP_API_BASE` 构建期注入，运行时改环境变量无效；联调期在开发者工具勾选「不校验合法域名」。后端需开启 `WECHAT_APPID`/`WECHAT_SECRET`，否则微信登录返回 503。真实链路（jscode2session、合法域名）需要真实 AppID，见 [DEPLOYMENT.md 的微信小程序节](DEPLOYMENT.md#微信小程序端2026-大赛参赛版)。
+
 ## 关键配置
 
 完整模板见 `.env.example`；WSL用localhost，Docker用内部服务名。不要把数据库连接串或Token复制进公开日志。
@@ -129,6 +142,7 @@ npm run dev
 |`CELERY_RESULT_BACKEND`|Celery结果后端|
 |`JWT_SECRET`|API/dispatcher配置必填的签名密钥|
 |`PADDLE_OCR_TOKEN`|Worker云OCR凭据|
+|`WECHAT_APPID` / `WECHAT_SECRET`|小程序登录（jscode2session）凭据；未配置时 `POST /api/auth/wechat/login` 返回503|
 |`RESULT_DIR`|API/Worker共同可访问的绝对结果目录；默认 `/tmp/results`|
 |`NEXT_PUBLIC_API_URL`|浏览器可访问的API地址；代码默认localhost:8111，Compose示例localhost:8000|
 
@@ -139,6 +153,7 @@ npm run dev
 |方法|路径|契约|
 |---|---|---|
 |POST|`/api/auth/register`、`/api/auth/login`|注册/登录，返回JWT|
+|POST|`/api/auth/wechat/login`|小程序登录：`code`（+可选`avatar`）换openid，新用户自动注册（`email`/`password_hash`为NULL），返回同一JWT；需配置微信凭据|
 |GET|`/api/auth/me`|当前用户|
 |POST|`/api/documents/upload`|multipart文件上传；当前按声明MIME和20MiB限制检查，非完整内容验证|
 |DELETE|`/api/documents/{id}`|按文档及关联任务权限删除；成功204、活动引用409；隔离历史任务拒绝普通删除|
@@ -177,6 +192,8 @@ npm run dev
 
 - `web/src/app/`：转换、历史、认证及 `/tools/*` 页面；`/merge-images` 重定向至图片工具。
 - `web/src/lib/`、`web/src/components/preview/`：请求、身份、i18n、任务状态和预览。
+- `miniprogram/src/`：Taro 页面（index/result/history/login）、`api/client.ts` 统一请求与401处理、`conversions.ts` 12类转换声明表；构建产物 `dist/` 不入库。
+- `api/app/wechat.py`、`routers/auth.py`：jscode2session 换取 openid 与小程序登录端点。
 - `api/app/task_service.py`、`dispatcher.py`、`routers/`：任务准入、持久化派发及HTTP边界。
 - `api/alembic/versions/`：001～004迁移；共享模型在API和Worker两侧维护。
 - `worker/worker/tasks.py`、`converters/`、`services/paddle_vl.py`：任务生命周期、12种转换和云OCR。
@@ -185,7 +202,7 @@ npm run dev
 
 **后端集成测试会清空应用表并执行迁移回退，只能使用隔离测试库。** 安装与运行方式见[审查记录的回归说明](docs/issues/04-project-audit-2026-09-12.md#回归运行方式)，不要指向真实用户数据库。
 
-未关闭事项包括文件过期/孤儿清理、上传资源预算、认证限流、OCR外部作业幂等、部分前端生命周期与可访问性。当前没有R2存储适配器、微信OAuth或生产级监控；以审查记录为准，不依据历史方案推断已实现功能。
+未关闭事项包括文件过期/孤儿清理、上传资源预算、认证限流、OCR外部作业幂等、部分前端生命周期与可访问性。当前没有R2存储适配器或生产级监控；微信登录（小程序端）已按 ADR0005 实现，Web 端仍无微信 OAuth。以审查记录为准，不依据历史方案推断已实现功能。
 
 ## License
 

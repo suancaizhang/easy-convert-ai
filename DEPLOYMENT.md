@@ -151,3 +151,28 @@ docker compose logs --tail=100 api dispatcher worker
 - 文件保留期限、完整可访问性/国际化、预览资源生命周期和真实云OCR完整链路仍须按审查记录逐项关闭。
 - Redis无公网端口不等于完全可信；生产仍应按网络边界和组织要求配置访问控制。
 - Python依赖漏洞审计与完整Docker部署是否已经实测，以审查报告的验证表为准。
+
+## 微信小程序端（2026 大赛参赛版）
+
+`miniprogram/` 是独立安装根（Taro 3 + React），构建产物 `miniprogram/dist/` 由微信开发者工具导入。小程序只做客户端，全部业务逻辑与配额仍由 API/Worker 执行，部署依赖与上文的 Compose 栈一致。
+
+### 1. 配置与构建
+
+- API 新增 `WECHAT_APPID`、`WECHAT_SECRET`（小程序 AppID 与 AppSecret），未配置时微信登录返回 503。
+- 小程序后端地址通过构建期环境变量注入：`TARO_APP_API_BASE=https://你的api域名`，`npm run build:weapp`。运行时改 env 无效，与 web 的 `NEXT_PUBLIC_API_URL` 同理。
+- `miniprogram/project.config.json` 已配置本项目参赛 AppID；其他主体复用仓库时必须替换为自己的 AppID。联调期可在开发者工具勾选「不校验合法域名」。
+- 合并镜像以仓库根为构建 context（`deploy/cloudbase/Dockerfile`），根 `.dockerignore` 负责排除 `.venv`、`node_modules` 与 `.env` 等本地产物；`entrypoint.sh` 必须保持 LF 换行（仓库根 `.gitattributes` 已锁定），否则容器启动会报 `no such file or directory`。
+- 本地复现云托管拓扑：`docker compose -f deploy/cloudbase/docker-compose.cloudbase-ref.yml up --build`，api 在 `127.0.0.1:8112`。
+
+### 2. 上线域名（选定：微信云托管，免 ICP 备案）
+
+完整操作步骤见 **[deploy/cloudbase/README.md](deploy/cloudbase/README.md)**：4 个云托管服务（api 公网 + processor/postgres/redis 私网）、CFS 挂载共享 `/tmp`（满足 `RESULT_DIR` 同一物理存储）、合并镜像构建、合法域名配置。要点：
+
+- 默认域名 `*.tcloudbase.com` 可直接配置为 request/uploadFile/downloadFile 合法域名，无需备案；官方标注默认域名偏开发测试，竞赛演示可接受，生产后续可绑定备案自定义域名。
+- 云托管第一课：api 首次启动自动 `alembic upgrade head`；先部署 postgres/redis/processor，最后部署 api 并开公网。
+- 不在小程序端做任何业务逻辑；配额与 OCR 登录约束仍由 API 强制。
+
+### 3. 提审与上线（大赛硬性要求）
+
+- 小程序须在 **2026-07-17 ~ 2026-10-17** 之间通过微信公众平台审核并正式上线，提报截止 **10-17**；预留审核与类目资质（隐私保护指引、AI 能力说明、收集用户信息声明）时间，不要卡点提交。
+- 提交材料：真实 AppID、小程序码、演示视频/截图、作品说明（AI 能力：PaddleOCR-VL 文字识别 + 12 类文档转换）。已上线超过比赛窗口的 Web 版不参评，仅作为后端设施复用（ADR0005）。

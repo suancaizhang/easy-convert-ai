@@ -1,0 +1,109 @@
+.quota {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #666;
+  font-size: 26px;
+}
+
+.quota-num {
+  color: #1677ff;
+  font-weight: 600;
+}
+
+.group {
+  margin-bottom: 24px;
+}
+
+.group-title {
+  font-weight: 600;
+  font-size: 28px;
+  margin-bottom: 16px;
+  padding-left: 8px;
+  border-left: 6px solid #1677ff;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.chip {
+  background: #fff;
+  border: 2px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 12px 28px;
+  font-size: 26px;
+}
+
+.chip-active {
+  background: #e6f2ff;
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.param-row {
+  margin-bottom: 20px;
+}
+
+.param-row:last-child {
+  margin-bottom: 0;
+}
+
+.param-label {
+  display: block;
+  color: #888;
+  font-size: 24px;
+  margin-bottom: 12px;
+}
+
+.param-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.opt {
+  background: #f5f6f8;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 24px;
+}
+
+.opt-active {
+  background: #e6f2ff;
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.param-input {
+  background: #f5f6f8;
+  border-radius: 10px;
+  padding: 16px 20px;
+  font-size: 26px;
+}
+
+.actions .btn-block {
+  margin-bottom: 16px;
+}
+
+.file-list {
+  margin: 12px 0;
+}
+
+.file-name {
+  display: block;
+  font-size: 24px;
+  color: #333;
+  word-break: break-all;
+}
+
+.progress {
+  display: block;
+  text-align: center;
+  color: #1677ff;
+  font-size: 26px;
+  margin-bottom: 12px;
+}

@@ -1042,6 +1042,23 @@
 
 Python运行中仍有上游Pydantic/Starlette/passlib/python-jose弃用提示；没有将其抑制成“无警告”。最终回归中的预期故障日志来自故障注入，不是未解释的失败。
 
+### 2026-09-14 微信小程序改造（ADR0005）审查与验证补充
+
+范围：`miniprogram/` 新客户端、`POST /api/auth/wechat/login` 登录链路、CloudBase 部署脚手架。完整发现见当日代码评审；以下为实际验证。
+
+|验证|最终观察|边界|
+|---|---|---|
+|小程序静态检查|`tsc --noEmit` **0错误**（修复前5个：未定义`POLL_MS`、`extensionType`无效字段、h5 `esbuild`无效配置、定时器类型）|仅weapp目标；H5端未验证|
+|小程序构建|`npm run build:weapp` Webpack编译成功（修复后复验通过）|未在微信开发者工具/真机执行|
+|API回归|`api/tests` **24/24通过**（隔离PG16 `easyconvert_test`，先`alembic upgrade head`）；其中`test_wechat_auth` 4项连跑3轮全绿|真实PG；jscode2session为mock，未调用微信服务|
+|OCR登录约束冒烟|模拟小程序全链路：登录→上传PNG→`ocr_to_word`（`params.output_format=searchable_pdf`）201→任务归属微信用户、`ocr_mode=NULL`、配额扣1→非法`output_format` 422→游客OCR 401|一次性脚本执行后已删除，未调用收费云OCR|
+|测试稳定性修复|`test_existing_openid_reuses_same_account`原断言整个JWT payload相等，`exp`秒级精度跨秒时偶发失败（实跑复现1214 vs 1215）；改为仅比较`sub`|意图是同一openid复用同一账号，DB count断言保留|
+|小程序参数契约|12类任务的params与`PARAMETER_MODELS`逐项核对一致；水印补`opacity` select（0.1/0.3/0.6，API默认0.3），tsc+weapp构建复验通过|`extra=forbid`下未声明字段会被422，客户端只传已声明key|
+|rotate角度类型缺陷|实测发现并修复：`RotateParameters.angle: Literal[90,180,270]`在Pydantic lax下拒绝字符串`"90"`（literal_error），小程序`start()`统一`String(v)`使旋转必然422；`ParamDef`新增`numeric`标记，angle与opacity均提交为JSON number，API侧实测`{'angle': 90}`通过；避免依赖Pydantic对不同数值类型的字符串强转差异|Web端发JSON number不受影响，仅小程序端需要此修复|
+|部署上下文|新增根`.dockerignore`与`.gitattributes`（`*.sh`/`*.py`锁LF）；`.gitignore`补`.scratch/`、`.superpowers/`、`miniprogram/.swc/`|tar模拟context仅~110KB（api子集）；未执行真实docker build|
+
+修复的Critical缺陷：结果页轮询引用未定义`POLL_MS`（整页不可用）、`chooseMessageFile`扩展名过滤字段名错误（类型检查失败且过滤静默失效）、`failed`终态不停轮询。未验证边界：微信真实登录、真机预览、云托管实际部署、`renderImages`多页串行下载的性能。
+
 ### 回归运行方式
 
 **以下API测试会TRUNCATE应用表并执行迁移回退；只能在新建、隔离且已迁移的测试数据库运行。数据库名必须以 `_test` 或 `_audit` 结尾。不能只把生产数据库改名后运行。**
@@ -1060,6 +1077,10 @@ python -m unittest discover -s tests -p test_conversion_integrity.py -v
 npm run test
 npm run build
 npm audit --omit=dev --registry=https://registry.npmjs.org
+
+# miniprogram目录（tsc检查 + weapp构建；不需要隔离数据库）
+npx tsc --noEmit
+npm run build:weapp
 ```
 
 ### 未关闭风险与上线门禁
@@ -1070,5 +1091,6 @@ npm audit --omit=dev --registry=https://registry.npmjs.org
 4. **资源与文件生命周期**仍有缺口：入口完整资源预算、文件魔数/解码上限、过期/孤儿文件清理等见原始附录。对未知DB提交结果保留目录是避免数据丢失的安全选择，可能留下需对账清理的孤儿目录。
 5. **前端剩余契约**：完整工具历史识别、OCR txt/searchable_pdf格式预览、取消/导航竞态、Blob释放、部分下载失败显示、全站i18n/键盘可访问性、分页删除等未全面修复。历史页对pdf_compress仍显示原始类型且无预览按钮；本轮PDF浏览器验证走真实压缩工具页，不冒称历史工具预览已修复。
 6. **游客与认证策略**：非OCR游客不限次数仍按ADR0003保留；只有游客来源的历史任务无法可靠恢复旧创建者，仍按原UUID能力访问策略处理。localStorage/CSP/CDN worker等条件性风险保留。
+7. **小程序端（ADR0005）未验证边界**：微信真实登录（jscode2session）、开发者工具/真机全流程、云托管实际部署未执行；`/api/auth/wechat/login` 无频率限制；结果页多页产物为串行下载，大PDF体验待真机评估；`TARO_APP_API_BASE` 与 `appid` 在提审前必须替换为真实值。
 
 审查前已有未提交改动未被回滚；修改停留在工作区，未创建commit或push。临时验证服务与数据在验证后清理，不作为项目运行依赖。

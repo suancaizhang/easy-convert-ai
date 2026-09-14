@@ -1,0 +1,16 @@
+{
+  "miniprogramRoot": "dist/",
+  "projectname": "easy-convert-mini",
+  "description": "易换文档 AI：PDF/Office/图片智能转换与 OCR",
+  "appid": "wx91fac3055805eb4e",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": false,
+    "compileHotReLoad": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.4.0"
+}

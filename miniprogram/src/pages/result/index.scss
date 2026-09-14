@@ -1,0 +1,94 @@
+.empty {
+  display: block;
+  color: #999;
+  text-align: center;
+  padding-top: 120px;
+}
+
+.status-card {
+  text-align: center;
+}
+
+.status-label {
+  display: block;
+  font-size: 30px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.status-value {
+  display: block;
+  font-size: 34px;
+}
+
+.status-waiting,
+.status-processing {
+  color: #1677ff;
+}
+
+.status-success {
+  color: #1f9d55;
+}
+
+.status-failed {
+  color: #e64340;
+}
+
+.status-hint {
+  display: block;
+  color: #999;
+  font-size: 24px;
+  margin-top: 16px;
+}
+
+.status-error {
+  display: block;
+  color: #e64340;
+  font-size: 24px;
+  margin-top: 16px;
+  word-break: break-all;
+}
+
+.pages-hint {
+  display: block;
+  text-align: center;
+  color: #888;
+  font-size: 24px;
+  margin-top: 12px;
+}
+
+.page-list {
+  margin-top: 16px;
+}
+
+.page-item {
+  background: #f5f6f8;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  text-align: center;
+  color: #1677ff;
+  font-size: 26px;
+}
+
+.text-card {
+  margin-top: 24px;
+}
+
+.text-body {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 26px;
+  color: #333;
+  max-height: 800px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.btn-home {
+  margin-top: 24px;
+  background: #fff;
+  color: #1677ff;
+  border: 2px solid #1677ff;
+}

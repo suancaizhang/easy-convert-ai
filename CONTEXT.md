@@ -58,3 +58,27 @@ A frontend page under `/tools/*` that hosts a single PDF tool operation. Shares 
 
 **ToolPageLayout**
 A shared React component providing the standard tool page structure: upload zone, parameter slot, submit button, polling, and download. Used by all `/tools/*` pages and `/convert`.
+
+**Competition Release**
+The formally published WeChat Mini Program submitted to the 2026 competition. It is distinct from an experience build and must satisfy the competition’s launch-window requirement.
+
+**Demo-Scale Release**
+A Competition Release intended for the competition demonstration rather than general public operation. It retains the existing task quotas and backend boundaries and makes no new long-term operations commitments.
+
+**Personal Publisher**
+The individual who controls the Mini Program account and is responsible for the Competition Release, its CloudBase environment, submission materials, and privacy disclosures.
+
+**Competition Entry Name**
+The public name submitted to the 2026 competition: “AI 文档转换”. It must be consistent across the WeChat Mini Program, review materials, Mini Program code, and the authorization letter.
+
+**Single Participant**
+The sole author and participant of the Competition Release. This person owns the entry rights and signs the competition authorization letter.
+
+**Competition Cloud Environment**
+The CloudBase environment separately managed by the Personal Publisher for the Demo-Scale Release.
+
+**Proposed Competition File Retention Window**
+A not-yet-implemented 24-hour retention target for the Demo-Scale Release. Upload metadata can record `expires_at`, but no cleanup process currently enforces expiry for unbound uploads, task inputs, or results (ADR0006).
+
+**Proposed Conversion Record Deletion**
+A not-yet-implemented operation that would remove a terminal Task together with all source Documents, results, and metadata. The current document-level delete endpoint does not provide this multi-source conversion-record guarantee (ADR0006).

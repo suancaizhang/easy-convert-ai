@@ -1,0 +1,79 @@
+version: "3.9"
+# 本地等价编排参考：云托管按 deploy/cloudbase/README.md 在控制台逐个服务创建。
+# 本文件仅供本地复现云托管架构（CFS 以 named volume 模拟），不是云托管部署入口。
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/cloudbase/Dockerfile
+    environment: &env
+      SERVICE_MODE: api
+      PORT: "8000"
+      DATABASE_URL: postgresql://easyconvert:easyconvert_dev@postgres:5432/easyconvert
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      RESULT_DIR: /tmp/results
+      JWT_SECRET: change-in-production
+      WECHAT_APPID: ${WECHAT_APPID:-}
+      WECHAT_SECRET: ${WECHAT_SECRET:-}
+      PADDLE_OCR_TOKEN: ${PADDLE_OCR_TOKEN:-}
+    volumes:
+      - shared_tmp:/tmp
+    ports:
+      - "8112:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  processor:
+    build:
+      context: ../..
+      dockerfile: deploy/cloudbase/Dockerfile
+    environment:
+      <<: *env
+      SERVICE_MODE: processor
+      PORT: "8001"
+    volumes:
+      - shared_tmp:/tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: easyconvert
+      POSTGRES_PASSWORD: easyconvert_dev
+      POSTGRES_DB: easyconvert
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U easyconvert -d easyconvert"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  shared_tmp:
+  pg_data:
+  redis_data:

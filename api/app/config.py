@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440  # 24 hours
 
+    wechat_appid: str = ""
+    wechat_secret: str = ""
+
     class Config:
         env_file = ".env"
         extra = "ignore"

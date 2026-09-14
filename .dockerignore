@@ -1,0 +1,15 @@
+# 根上下文构建（deploy/cloudbase/Dockerfile）专用：子目录 .dockerignore 不生效。
+.git
+.scratch
+.superpowers
+**/.venv
+**/venv
+**/__pycache__
+**/node_modules
+**/.env
+**/.env.*
+web/.next
+miniprogram/dist
+miniprogram/.swc
+postgres_data
+redis_data

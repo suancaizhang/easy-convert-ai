@@ -1,0 +1,3 @@
+# 锁定 shell 脚本换行符：CRLF 会让容器 ENTRYPOINT 报 no such file or directory
+*.sh text eol=lf
+*.py text eol=lf

@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password, verify_password, create_access_token
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import User
+from app.wechat import code2openid
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -18,6 +20,11 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class WechatLoginRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=128)
+    avatar: str | None = Field(default=None, max_length=512)
 
 
 class TokenResponse(BaseModel):
@@ -57,6 +64,27 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="邮箱或密码错误")
     if not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="邮箱或密码错误")
+    token = create_access_token({"sub": str(user.id)})
+    return TokenResponse(access_token=token)
+
+
+@router.post("/wechat/login", response_model=TokenResponse)
+def wechat_login(body: WechatLoginRequest, db: Session = Depends(get_db)):
+    """小程序端：wx.login 拿 code，服务端换取 openid 并登录/注册。"""
+    openid = code2openid(body.code)
+    user = db.query(User).filter(User.wechat_openid == openid).first()
+    if user is None:
+        user = User(wechat_openid=openid, avatar=body.avatar)
+        db.add(user)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            user = db.query(User).filter(User.wechat_openid == openid).first()
+            if user is None:
+                raise
+        else:
+            db.refresh(user)
     token = create_access_token({"sub": str(user.id)})
     return TokenResponse(access_token=token)
 
