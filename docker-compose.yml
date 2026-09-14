@@ -3,12 +3,14 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -17,17 +19,41 @@ services:
       context: ./api
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
+    environment:
+      RESULT_DIR: /tmp/results
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json, urllib.request; r = json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)); assert r['status'] == 'healthy'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     volumes:
       - upload_data:/tmp/uploads
       - guest_data:/tmp/guest
+      - result_data:/tmp/results
+    networks:
+      - app-network
+
+  dispatcher:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.dispatcher"]
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -37,21 +63,23 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      RESULT_DIR: /tmp/results
+    restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
+      api:
         condition: service_healthy
     volumes:
       - upload_data:/tmp/uploads
       - guest_data:/tmp/guest
+      - result_data:/tmp/results
     networks:
       - app-network
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -64,14 +92,13 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    ports:
-      - "5432:5432"
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-easyconvert}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-easyconvert_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-easyconvert}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-easyconvert}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-easyconvert} -d ${POSTGRES_DB:-easyconvert}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -85,6 +112,7 @@ volumes:
   postgres_data:
   upload_data:
   guest_data:
+  result_data:
 
 networks:
   app-network:

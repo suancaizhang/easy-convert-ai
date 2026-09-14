@@ -224,4 +224,12 @@ export interface TranslationKeys {
 
   // common
   "common.fileSizeMB": string;
+
+  // progress & cancel
+  "progress.converting_pages": string;
+  "progress.converting_images": string;
+  "progress.converting_generic": string;
+  "cancel.button": string;
+  "cancel.cancelled": string;
+  "cancel.cannotCancel": string;
 }

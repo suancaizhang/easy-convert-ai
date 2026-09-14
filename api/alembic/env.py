@@ -16,7 +16,7 @@ database_url = os.getenv(
     "DATABASE_URL",
     "postgresql://easyconvert:easyconvert_dev@postgres:5432/easyconvert",
 )
-config.set_main_option("sqlalchemy.url", database_url)
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 

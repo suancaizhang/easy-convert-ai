@@ -189,32 +189,36 @@ class PaddleVLService:
         resp.raise_for_status()
 
         pages: list[OcrPage] = []
-        lines = resp.text.strip().split("\n")
-
-        page_num = 0
-        for line in lines:
-            line = line.strip()
-            if not line:
+        for line_num, line in enumerate(resp.text.splitlines(), start=1):
+            if not line.strip():
                 continue
 
+            # A bad record is not an empty page: skipping it silently changes all
+            # subsequent page numbers and can attach OCR text to the wrong image.
             try:
-                result = json.loads(line)["result"]
-            except (json.JSONDecodeError, KeyError) as e:
-                logger.warning(f"Failed to parse JSONL line: {e}")
-                continue
+                record = json.loads(line)
+                if not isinstance(record, dict) or not isinstance(record.get("result"), dict):
+                    raise ValueError("missing result object")
+                layouts = record["result"].get("layoutParsingResults")
+                if not isinstance(layouts, list) or not layouts:
+                    raise ValueError("missing page results")
+                for layout in layouts:
+                    if not isinstance(layout, dict) or not isinstance(layout.get("markdown"), dict):
+                        raise ValueError("missing page markdown")
+                    markdown = layout["markdown"]
+                    text = markdown.get("text")
+                    images = markdown.get("images", {})
+                    if not isinstance(text, str):
+                        raise ValueError("page text must be a string")
+                    if not isinstance(images, dict) or any(
+                        not isinstance(key, str) or not isinstance(url, str)
+                        for key, url in images.items()
+                    ):
+                        raise ValueError("page images must map paths to URLs")
+                    pages.append(OcrPage(len(pages) + 1, text, images))
+            except ValueError as exc:
+                raise RuntimeError(f"Invalid PaddleVL JSONL result at line {line_num}") from exc
 
-            for layout_result in result.get("layoutParsingResults", []):
-                page_num += 1
-                markdown_data = layout_result.get("markdown", {})
-                markdown_text = markdown_data.get("text", "")
-                images = markdown_data.get("images", {})
-
-                pages.append(
-                    OcrPage(
-                        page_num=page_num,
-                        markdown_text=markdown_text,
-                        images=images,
-                    )
-                )
-
+        if not pages:
+            raise RuntimeError("PaddleVL returned no page results")
         return OcrResult(pages=pages, total_pages=len(pages))

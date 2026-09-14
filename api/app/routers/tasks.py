@@ -1,42 +1,32 @@
+import mimetypes
 import os
 import uuid
 
-from celery import Celery
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.database import get_db
 from app.deps import get_optional_user
-from app.models import User, Document, Task
-from app.routers.quota import consume_quota
+from app.models import User
+from app.redis_client import redis_client
+from app.routers.quota import refund_task_quota
+from app.task_service import TaskType, create_task_record, load_task, valid_result_path
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
-celery_app = Celery(broker=settings.celery_broker_url)
-
-OFFICE_TYPES = {"excel_to_pdf", "ppt_to_pdf", "word_to_pdf"}
-
-PDF_TOOL_TYPES = {"pdf_merge", "pdf_split", "pdf_compress", "pdf_rotate", "pdf_watermark"}
-
-ALLOWED_OUTPUT_PREFIXES = ["/tmp/convert_", "/tmp/uploads", "/tmp/guest"]
-
-
-ALLOWED_IMAGE_TYPES = {"png", "jpg", "jpeg", "webp"}
-
 
 class CreateTaskRequest(BaseModel):
-    document_id: str
-    task_type: str
-    ocr_mode: str | None = None
+    document_id: uuid.UUID
+    task_type: TaskType
+    ocr_mode: str | None = Field(default=None, max_length=20)
     params: dict | None = None
-    source_document_ids: list[str] | None = None
+    source_document_ids: list[uuid.UUID] | None = Field(default=None, max_length=20)
 
 
 class CreateMergeRequest(BaseModel):
-    document_ids: list[str]
+    document_ids: list[uuid.UUID] = Field(min_length=2, max_length=20)
     task_type: str = "images_to_pdf"
 
 
@@ -48,326 +38,111 @@ class TaskResponse(BaseModel):
     error_code: str | None = None
 
 
-class TaskStatusResponse(BaseModel):
-    id: str
-    status: str
-    task_type: str
-    error_message: str | None = None
-    error_code: str | None = None
-    result_path: str | None = None
+class TaskStatusResponse(TaskResponse):
+    progress: int | None = None
+    progress_current: int | None = None
+    progress_total: int | None = None
+
+
+def task_response(task) -> TaskResponse:
+    return TaskResponse(id=str(task.id), task_type=task.task_type, status=task.status,
+                        error_message=task.error_message, error_code=task.error_code)
 
 
 @router.post("/create", response_model=TaskResponse, status_code=201)
-def create_task(
-    body: CreateTaskRequest,
-    request: Request,
-    current_user: User | None = Depends(get_optional_user),
-    db: Session = Depends(get_db),
-):
-    source_doc_ids: list[str] | None = None
-
-    if body.task_type == "pdf_merge":
-        if not body.source_document_ids or len(body.source_document_ids) < 2:
-            raise HTTPException(status_code=400, detail="合并需要至少 2 个文档")
-
-        try:
-            doc_uuids = [uuid.UUID(d) for d in body.source_document_ids]
-        except ValueError:
-            raise HTTPException(status_code=400, detail="document_id 格式不合法")
-
-        documents = db.query(Document).filter(Document.id.in_(doc_uuids)).all()
-        found_ids = {str(d.id) for d in documents}
-        missing = [d for d in body.source_document_ids if d not in found_ids]
-        if missing:
-            raise HTTPException(status_code=400, detail=f"文档不存在: {', '.join(missing)}")
-
-        for doc in documents:
-            if current_user and doc.user_id and doc.user_id != current_user.id:
-                raise HTTPException(status_code=403, detail="无权操作此文档")
-
-        source_doc_ids = body.source_document_ids
-        doc_map = {str(d.id): d for d in documents}
-        document = doc_map[source_doc_ids[0]]
-    else:
-        document = db.query(Document).filter(
-            Document.id == uuid.UUID(body.document_id)
-        ).first()
-        if not document:
-            raise HTTPException(status_code=404, detail="文档不存在")
-
-        if current_user and document.user_id and document.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权操作此文档")
-
-    if current_user:
-        active = db.query(Task).join(Document).filter(
-            Document.user_id == current_user.id,
-            Task.status.in_(["waiting", "processing"]),
-        ).first()
-        if active:
-            raise HTTPException(status_code=429, detail="当前有正在进行的任务，请等待完成")
-
-    if body.task_type not in PDF_TOOL_TYPES:
-        consume_quota(db, current_user, request)
-
-    task = Task(
-        id=uuid.uuid4(),
-        document_id=document.id,
-        task_type=body.task_type,
-        ocr_mode=body.ocr_mode,
-        params=body.params,
-        status="waiting",
-        source_document_ids=source_doc_ids,
-    )
-    db.add(task)
-    db.commit()
-    db.refresh(task)
-
-    if body.task_type in OFFICE_TYPES:
-        celery_app.send_task(
-            "worker.tasks.convert_document_office",
-            args=[str(task.id)],
-            queue="office",
-        )
-    else:
-        celery_app.send_task(
-            "worker.tasks.convert_document",
-            args=[str(task.id)],
-            queue="default",
-        )
-
-    return TaskResponse(
-        id=str(task.id),
-        task_type=task.task_type,
-        status=task.status,
-    )
-
-
-@router.get("/{task_id}/status", response_model=TaskStatusResponse)
-def get_task_status(
-    task_id: str,
-    current_user: User | None = Depends(get_optional_user),
-    db: Session = Depends(get_db),
-):
-    task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-
-    document = db.query(Document).filter(Document.id == task.document_id).first()
-    if document and document.user_id and current_user:
-        if document.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权查看此任务")
-
-    return TaskStatusResponse(
-        id=str(task.id),
-        status=task.status,
-        task_type=task.task_type,
-        error_message=task.error_message,
-        error_code=task.error_code,
-        result_path=None,
-    )
+def create_task(body: CreateTaskRequest, current_user: User | None = Depends(get_optional_user),
+                db: Session = Depends(get_db)):
+    source_ids = body.source_document_ids if body.source_document_ids is not None else [body.document_id]
+    task = create_task_record(db, current_user, source_ids, body.task_type, body.params, body.ocr_mode)
+    return task_response(task)
 
 
 @router.post("/create-merge", response_model=TaskResponse, status_code=201)
-def create_merge_task(
-    body: CreateMergeRequest,
-    request: Request,
-    current_user: User | None = Depends(get_optional_user),
-    db: Session = Depends(get_db),
-):
+def create_merge_task(body: CreateMergeRequest, current_user: User | None = Depends(get_optional_user),
+                      db: Session = Depends(get_db)):
     if body.task_type != "images_to_pdf":
         raise HTTPException(status_code=400, detail="task_type 仅支持 images_to_pdf")
+    if len(set(body.document_ids)) < 2:
+        raise HTTPException(status_code=400, detail="合并需要至少 2 个不同的图片")
+    task = create_task_record(db, current_user, body.document_ids, "images_to_pdf", None)
+    return task_response(task)
 
-    if not (2 <= len(body.document_ids) <= 20):
-        raise HTTPException(status_code=400, detail="图片数量必须在 2~20 张之间")
 
-    # deduplicate while preserving order
-    seen: set[str] = set()
-    unique_ids: list[str] = []
-    for doc_id in body.document_ids:
-        if doc_id not in seen:
-            seen.add(doc_id)
-            unique_ids.append(doc_id)
+@router.get("/{task_id}/status", response_model=TaskStatusResponse)
+def get_task_status(task_id: uuid.UUID, current_user: User | None = Depends(get_optional_user),
+                    db: Session = Depends(get_db)):
+    task, _ = load_task(db, task_id, current_user)
+    response = TaskStatusResponse(**task_response(task).model_dump())
+    if task.status == "processing":
+        try:
+            data = redis_client.hgetall(f"task_progress:{task_id}")
+            if data:
+                response.progress = max(0, min(100, int(data["progress"])))
+                response.progress_current = int(data["current"])
+                response.progress_total = int(data["total"])
+        except Exception:
+            # Optional progress cannot override the authoritative database state.
+            pass
+    return response
 
-    try:
-        doc_uuids = [uuid.UUID(d) for d in unique_ids]
-    except ValueError:
-        raise HTTPException(status_code=400, detail="document_id 格式不合法")
 
-    documents = db.query(Document).filter(Document.id.in_(doc_uuids)).all()
-    found_ids = {str(d.id) for d in documents}
-    missing = [d for d in unique_ids if d not in found_ids]
-    if missing:
-        raise HTTPException(status_code=400, detail=f"文档不存在: {', '.join(missing)}")
-
-    for doc in documents:
-        if current_user and doc.user_id and doc.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权操作此文档")
-        if doc.file_type.lower() not in ALLOWED_IMAGE_TYPES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"文档 {doc.filename} 格式不支持，仅允许 PNG/JPG/WebP",
-            )
-
-    consume_quota(db, current_user, request)
-
-    # use first document as primary document_id for compatibility
-    doc_map = {str(d.id): d for d in documents}
-    primary_doc = doc_map[unique_ids[0]]
-
-    task = Task(
-        id=uuid.uuid4(),
-        document_id=primary_doc.id,
-        task_type="images_to_pdf",
-        status="waiting",
-        source_document_ids=unique_ids,
-    )
-    db.add(task)
+@router.post("/{task_id}/cancel")
+def cancel_task(task_id: uuid.UUID, current_user: User | None = Depends(get_optional_user),
+                db: Session = Depends(get_db)):
+    task, _ = load_task(db, task_id, current_user, lock=True)
+    if task.status != "waiting":
+        raise HTTPException(status_code=409, detail="任务已开始处理或结束，无法取消")
+    task.status = "failed"
+    task.error_code = "ERR_CANCELLED"
+    task.error_message = "用户取消"
+    refund_task_quota(db, task)
     db.commit()
-    db.refresh(task)
-
-    celery_app.send_task(
-        "worker.tasks.convert_document",
-        args=[str(task.id)],
-        queue="default",
-    )
-
-    return TaskResponse(
-        id=str(task.id),
-        task_type=task.task_type,
-        status=task.status,
-    )
+    # DB state arbitrates cancellation even if delivery raced or already happened.
+    return {"detail": "任务已取消"}
 
 
-def _validate_result_path(file_path: str) -> bool:
-    real_path = os.path.realpath(file_path)
-    return any(real_path.startswith(prefix) for prefix in ALLOWED_OUTPUT_PREFIXES)
+def ready_result(db, task_id, user):
+    task, document = load_task(db, task_id, user)
+    if task.status != "success":
+        raise HTTPException(status_code=400, detail="任务尚未完成")
+    if not task.result_paths:
+        raise HTTPException(status_code=404, detail="结果文件不存在")
+    return task, document
+
+
+def result_response(task, document, index: int, preview: bool, *, per_page: bool = False):
+    if index < 0 or index >= len(task.result_paths):
+        raise HTTPException(status_code=400, detail="页码超出范围")
+    path = task.result_paths[index]
+    if not valid_result_path(path):
+        raise HTTPException(status_code=403, detail="非法文件路径")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="结果文件已过期或不存在")
+    if preview:
+        media_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        return FileResponse(path, media_type=media_type, headers={"Content-Disposition": "inline"})
+    base = document.filename.rsplit(".", 1)[0]
+    extension = os.path.splitext(path)[1]
+    suffix = f"page{index + 1}" if per_page else "converted"
+    return FileResponse(path, filename=f"{base}_{suffix}{extension}")
 
 
 @router.get("/{task_id}/download")
-def download_result(
-    task_id: str,
-    preview: bool = Query(False),
-    current_user: User | None = Depends(get_optional_user),
-    db: Session = Depends(get_db),
-):
-    task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-
-    document = db.query(Document).filter(Document.id == task.document_id).first()
-    if document and document.user_id and current_user:
-        if document.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权下载此文件")
-
-    if task.status != "success":
-        raise HTTPException(status_code=400, detail="任务尚未完成")
-    if not task.result_path:
-        raise HTTPException(status_code=404, detail="结果文件不存在")
-
-    file_path = task.result_path.split(",")[0]
-
-    if not _validate_result_path(file_path):
-        raise HTTPException(status_code=403, detail="非法文件路径")
-
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="结果文件已过期或不存在")
-
-    ext = file_path.rsplit(".", 1)[-1].lower()
-
-    if preview:
-        media_type_map = {
-            "pdf": "application/pdf",
-            "png": "image/png",
-            "jpg": "image/jpeg",
-            "jpeg": "image/jpeg",
-            "webp": "image/webp",
-        }
-        media_type = media_type_map.get(ext, "application/octet-stream")
-        return FileResponse(file_path, media_type=media_type, headers={"Content-Disposition": "inline"})
-
-    base_name = document.filename.rsplit(".", 1)[0] if document else "result"
-    download_name = f"{base_name}_converted.{ext}"
-
-    return FileResponse(file_path, filename=download_name)
+def download_result(task_id: uuid.UUID, preview: bool = Query(False),
+                    current_user: User | None = Depends(get_optional_user), db: Session = Depends(get_db)):
+    task, document = ready_result(db, task_id, current_user)
+    return result_response(task, document, 0, preview)
 
 
 @router.get("/{task_id}/pages")
-def get_task_pages(
-    task_id: str,
-    current_user: User | None = Depends(get_optional_user),
-    db: Session = Depends(get_db),
-):
-    """返回任务结果的总页数和文件类型（用于多页图片预览）"""
-    task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-
-    document = db.query(Document).filter(Document.id == task.document_id).first()
-    if document and document.user_id and current_user:
-        if document.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权访问此任务")
-
-    if task.status != "success":
-        raise HTTPException(status_code=400, detail="任务尚未完成")
-    if not task.result_path:
-        raise HTTPException(status_code=404, detail="结果文件不存在")
-
-    paths = [p.strip() for p in task.result_path.split(",") if p.strip()]
-    ext = paths[0].rsplit(".", 1)[-1].lower() if paths else ""
-
-    return {"total": len(paths), "ext": ext}
+def get_task_pages(task_id: uuid.UUID, current_user: User | None = Depends(get_optional_user),
+                   db: Session = Depends(get_db)):
+    task, _ = ready_result(db, task_id, current_user)
+    return {"total": len(task.result_paths), "ext": os.path.splitext(task.result_paths[0])[1].lstrip(".").lower()}
 
 
 @router.get("/{task_id}/download/{page_index}")
-def download_page(
-    task_id: str,
-    page_index: int,
-    preview: bool = Query(False),
-    current_user: User | None = Depends(get_optional_user),
-    db: Session = Depends(get_db),
-):
-    """按页码索引下载多页结果中的单个文件"""
-    task = db.query(Task).filter(Task.id == uuid.UUID(task_id)).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-
-    document = db.query(Document).filter(Document.id == task.document_id).first()
-    if document and document.user_id and current_user:
-        if document.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权下载此文件")
-
-    if task.status != "success":
-        raise HTTPException(status_code=400, detail="任务尚未完成")
-    if not task.result_path:
-        raise HTTPException(status_code=404, detail="结果文件不存在")
-
-    paths = [p.strip() for p in task.result_path.split(",") if p.strip()]
-
-    if page_index < 0 or page_index >= len(paths):
-        raise HTTPException(status_code=400, detail=f"页码超出范围，共 {len(paths)} 页")
-
-    file_path = paths[page_index]
-
-    if not _validate_result_path(file_path):
-        raise HTTPException(status_code=403, detail="非法文件路径")
-
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="结果文件已过期或不存在")
-
-    ext = file_path.rsplit(".", 1)[-1].lower()
-
-    if preview:
-        media_type_map = {
-            "pdf": "application/pdf",
-            "png": "image/png",
-            "jpg": "image/jpeg",
-            "jpeg": "image/jpeg",
-            "webp": "image/webp",
-        }
-        media_type = media_type_map.get(ext, "application/octet-stream")
-        return FileResponse(file_path, media_type=media_type, headers={"Content-Disposition": "inline"})
-
-    base_name = document.filename.rsplit(".", 1)[0] if document else "result"
-    download_name = f"{base_name}_page{page_index + 1}.{ext}"
-
-    return FileResponse(file_path, filename=download_name)
+def download_page(task_id: uuid.UUID, page_index: int, preview: bool = Query(False),
+                  current_user: User | None = Depends(get_optional_user), db: Session = Depends(get_db)):
+    task, document = ready_result(db, task_id, current_user)
+    return result_response(task, document, page_index, preview, per_page=True)

@@ -7,9 +7,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8111";
 
 export type ToolStage = "idle" | "uploading" | "converting" | "done" | "error";
 
+export interface ProgressDetail {
+  current: number;
+  total: number;
+}
+
 export interface ToolPageState {
   stage: ToolStage;
   uploadProgress: number;
+  conversionProgress: number;
+  progressDetail: ProgressDetail | null;
   taskStatus: string;
   error: string;
 }
@@ -26,14 +33,27 @@ export interface UseToolPageReturn extends ToolPageState {
   download: () => Promise<void>;
   preview: () => void;
   reset: () => void;
+  cancel: () => Promise<void>;
+  canCancel: boolean;
   taskId: string;
   showPreview: boolean;
   closePreview: () => void;
 }
 
+interface StatusResponse {
+  status: string;
+  error_message?: string;
+  error_code?: string;
+  progress?: number;
+  progress_current?: number;
+  progress_total?: number;
+}
+
 export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions): UseToolPageReturn {
   const [stage, setStage] = useState<ToolStage>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [conversionProgress, setConversionProgress] = useState(0);
+  const [progressDetail, setProgressDetail] = useState<ProgressDetail | null>(null);
   const [taskStatus, setTaskStatus] = useState("");
   const [error, setError] = useState("");
   const [taskId, setTaskId] = useState("");
@@ -50,15 +70,24 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
   const startPolling = useCallback((id: string) => {
     let attempts = 0;
     let interval = 2000;
+    let hasProgress = false;
 
     const poll = async () => {
       try {
-        const res = await api.get<{ status: string; error_message?: string }>(
-          `/api/tasks/${id}/status`
-        );
+        const res = await api.get<StatusResponse>(`/api/tasks/${id}/status`);
         setTaskStatus(res.status);
 
+        // Update progress if available
+        if (res.progress != null) {
+          hasProgress = true;
+          setConversionProgress(res.progress);
+          if (res.progress_current != null && res.progress_total != null) {
+            setProgressDetail({ current: res.progress_current, total: res.progress_total });
+          }
+        }
+
         if (res.status === "success") {
+          setConversionProgress(100);
           setStage("done");
           return;
         }
@@ -75,9 +104,16 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
           return;
         }
 
-        if (attempts <= 5) interval = 2000;
-        else if (attempts <= 10) interval = 5000;
-        else interval = Math.min(interval * 1.5, 15000);
+        // Keep fast polling when progress is active (total > 5 items)
+        if (hasProgress && res.progress_total && res.progress_total > 5) {
+          interval = 2000;
+        } else if (attempts <= 5) {
+          interval = 2000;
+        } else if (attempts <= 10) {
+          interval = 5000;
+        } else {
+          interval = Math.min(interval * 1.5, 15000);
+        }
 
         pollingRef.current = setTimeout(poll, interval);
       } catch {
@@ -98,6 +134,8 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
     setError("");
     setStage("uploading");
     setUploadProgress(0);
+    setConversionProgress(0);
+    setProgressDetail(null);
 
     try {
       const total = files.length;
@@ -124,6 +162,23 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
       setError(err instanceof ApiError ? err.message : "操作失败，请重试");
     }
   }, [createTask, startPolling]);
+
+  const cancel = useCallback(async () => {
+    if (!taskId) return;
+    try {
+      await api.post(`/api/tasks/${taskId}/cancel`);
+      stopPolling();
+      setStage("idle");
+      setTaskStatus("");
+      setConversionProgress(0);
+      setProgressDetail(null);
+      setTaskId("");
+    } catch {
+      // 409 or other error — task already processing, let polling continue
+    }
+  }, [taskId]);
+
+  const canCancel = stage === "converting" && taskStatus === "waiting";
 
   const fetchResult = useCallback(async (preview: boolean): Promise<void> => {
     if (!taskId) return;
@@ -174,11 +229,17 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
     stopPolling();
     setStage("idle");
     setUploadProgress(0);
+    setConversionProgress(0);
+    setProgressDetail(null);
     setTaskStatus("");
     setError("");
     setTaskId("");
     setShowPreview(false);
   }, []);
 
-  return { stage, uploadProgress, taskStatus, error, taskId, showPreview, uploadAndRun, download, preview, closePreview, reset };
+  return {
+    stage, uploadProgress, conversionProgress, progressDetail,
+    taskStatus, error, taskId, showPreview, canCancel,
+    uploadAndRun, download, preview, closePreview, reset, cancel,
+  };
 }

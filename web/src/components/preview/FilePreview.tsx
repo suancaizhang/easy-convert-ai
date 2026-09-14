@@ -4,9 +4,14 @@ import { useState, useEffect } from "react";
 import { useI18n } from "@/lib/i18n";
 import { fetchTaskFile } from "@/lib/fetchTaskFile";
 import { PreviewModal } from "./PreviewModal";
-import { PdfPreview } from "./PdfPreview";
+import dynamic from "next/dynamic";
 import { ImagePreview } from "./ImagePreview";
 import { DocxPreview } from "./DocxPreview";
+
+// PDF.js requires browser APIs; never evaluate it during server prerendering.
+const PdfPreview = dynamic(() => import("./PdfPreview").then((mod) => mod.PdfPreview), {
+  ssr: false,
+});
 
 interface FilePreviewProps {
   taskId: string;

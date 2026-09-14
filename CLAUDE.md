@@ -1,139 +1,77 @@
-# CLAUDE.md
+# Project context
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+AI document conversion platform: PDF, Office files and images; paid OCR uses PaddleOCR-VL 1.6 only. `web/`, `api/`, `worker/` are independent install roots, not a package-manager monorepo.
 
-## Project Overview
-
-AI-powered document conversion platform. Users upload files (PDF, Word, Excel, PPT, images), choose a target format, and get back converted documents. Supports OCR via PaddleOCR-VL 1.6 cloud API.
-
-Three services in one repo (not a package-manager monorepo):
-- `web/` — Next.js 15 frontend (TypeScript, React 19, Tailwind CSS)
-- `api/` — FastAPI backend (Python 3.11, SQLAlchemy 2.0, PostgreSQL, Alembic)
-- `worker/` — Celery worker (Python 3.11, PyMuPDF, LibreOffice headless)
-
-Orchestrated via `docker-compose.yml` with Redis as broker and PostgreSQL for persistence.
+For task lifecycle, authorization, quota or artifact changes, read `docs/adr/0004-task-ownership-delivery-and-artifacts.md`. For known defects and verification limits, read `docs/issues/04-project-audit-2026-09-12.md`. For deployment or migration, follow `DEPLOYMENT.md` rather than historical snippets.
 
 ## Commands
 
-### Frontend (`cd web/`)
+Frontend (`web/`, Node20-compatible):
 
-```bash
-npm run dev          # Next.js dev server on 0.0.0.0:3000
-npm run build        # Production build (standalone output)
-npm run lint         # ESLint via next lint
-npm run test         # Vitest run (single pass)
-npm run test:watch   # Vitest in watch mode
+```sh
+npm ci --ignore-scripts
+npm run dev
+npm run test
+npm run build
 ```
 
-Single test file: `npx vitest run src/lib/i18n.test.tsx`
+API (`api/`, Python3.11+, PostgreSQL16):
 
-### API (`cd api/`)
-
-```bash
+```sh
 pip install -r requirements.txt
-alembic upgrade head                    # Run DB migrations
-uvicorn app.main:app --reload --port 8111   # Local dev
+alembic upgrade head
+uvicorn app.main:app --reload --port 8111
 ```
 
-New migration: `alembic revision --autogenerate -m "description"`
+Start the durable task dispatcher in a separate process with the same API/database/broker environment:
 
-### Worker (`cd worker/`)
+```sh
+python -m app.dispatcher
+```
 
-```bash
+Worker (`worker/`):
+
+```sh
 pip install -r requirements.txt
 celery -A worker.celery_app worker --loglevel=info --concurrency=2 -Q default,office
 ```
 
-The `-Q default,office` flag is critical — without it, Celery only listens on its default queue and misses all tasks.
+Both queues are declared in `worker/config.py`; explicitly naming them is operational clarity, not a workaround for missing default subscriptions.
 
-### Full Stack (Docker)
+Docker: copy `.env.example` to `.env`, configure real secrets and the browser-facing API URL, then `docker compose up --build`. Six services: web, api, dispatcher, worker, redis, postgres. Only web/API are published to host loopback; DB/Redis remain inside the Compose network.
 
-```bash
-cp .env.example .env   # Set JWT_SECRET at minimum
-docker compose up --build
-```
+## Data flow and invariants
 
-Services: web(:3000), api(:8000), worker, redis(:6379), postgres(:5432)
+1. API uploads to `/tmp/uploads` or `/tmp/guest` and stores Document metadata.
+2. API checks every source's ownership. Owned resources require the matching user; an absent/invalid token cannot bypass this. OCR requires login; guests may use non-OCR operations without a quota (ADR0003).
+3. Task creation records its own user/charge identity. User quota and waiting task are committed together; the dispatcher delivers database-backed pending work to `default` or `office`.
+4. Worker executes with per-task mutual exclusion and terminal-state guards. Retry is not final failure. Cancellation and actual charge refunds are transactional and at most once.
+5. Worker writes outputs beneath `RESULT_DIR` (default `/tmp/results`) and records `result_paths` as an ordered JSONB list. API/Worker share that directory. No comma-joined output string or 512-character output list limit remains.
+6. Frontend polls `/api/tasks/{id}/status` and fetches download/preview endpoints. Status responses do not expose physical filesystem paths.
 
-## Architecture
+Task statuses remain `waiting`, `processing`, `success`, `failed`; a cancelled waiting task is `failed` with `ERR_CANCELLED`. New Task.user_id is its creator, not necessarily the source document owner. Legacy ownership is inferred from all sources; conflicts or missing sources are quarantined as ERR_ACCESS and require manual reconciliation. `quota_date=NULL` means no recorded charge; old tasks are not assigned invented charge facts by migration. DB failures requeue delivery under a fresh execution lock; uncertain success commits preserve potentially published artifacts.
 
-### Data Flow
+## Code map
 
-```
-User uploads file
-  → API saves to /tmp/uploads (or /tmp/guest for anonymous)
-  → API creates Document + Task in PostgreSQL
-  → Celery dispatches to 'default' or 'office' queue
-  → Worker converts, writes result to /tmp/convert_*
-  → Worker updates Task status in DB
-  → Frontend polls GET /api/tasks/{id}/status
-  → On success, frontend calls download endpoint
-```
+### Frontend
 
-### Frontend (web/src/)
+Next.js15, React19, TypeScript, Tailwind. App Router pages include `/convert`, `/history`, `/login`, `/register`, `/tools/*`; `/merge-images` redirects to the images tool. `@/` maps to `src/`.
 
-- **App Router** pages: `/`, `/convert`, `/merge-images`, `/history`, `/login`, `/register`
-- **Auth**: Custom React Context (`lib/auth.tsx`), JWT in localStorage, no external auth library
-- **i18n**: Custom provider (`lib/i18n.tsx`), 7 languages (zh/en/th/vi/id/ms/fil), dictionaries in `i18n/`
-- **API client** (`lib/api.ts`): fetch for JSON, XMLHttpRequest for uploads (progress tracking). Default API URL: `http://localhost:8111`
-- **Path alias**: `@/` → `src/`
-- **No component library** in use yet — shadcn configured (`components.json`) but no `components/ui/` exists
+Providers: `I18nProvider → AuthProvider → pages`. Seven-language dictionaries live in `src/i18n`; JWT is currently held in localStorage by custom auth context. `useToolPage` owns upload/create/poll actions; preview components dispatch file rendering. Browser-only PDF.js must not be statically imported into server prerender paths.
 
-Provider hierarchy in root layout: `I18nProvider → AuthProvider → pages`
+### API and Worker
 
-### API (api/app/)
+API uses **synchronous** SQLAlchemy sessions (not async SQLAlchemy). Models: User, Document, Task. Routers: auth/documents/tasks/history/quota. Alembic owns schema migrations; update the corresponding Worker models whenever shared fields change.
 
-- `main.py` — FastAPI app, CORS, router registration
-- `models.py` — SQLAlchemy models: User, Document, Task
-- `routers/` — auth, documents, tasks, history, quota
-- `config.py` — Pydantic Settings from env vars
-- `database.py` — async SQLAlchemy session
+Worker's `CONVERTER_MAP` selects the 12 converters. Office conversions use LibreOffice subprocesses and route to `office`. `services/paddle_vl.py` implements cloud OCR; `ocr_to_word` remains the single OCR task type, with `params.output_format` selecting docx/txt/searchable_pdf (ADR0002). Ordered `source_document_ids` are authoritative multi-file inputs, with the first Document as anchor (ADR0001).
 
-Key design: quota deduction uses atomic SQL (`UPDATE ... WHERE daily_quota_used < limit`) to prevent race conditions.
+## Configuration and deployment gotchas
 
-### Worker (worker/worker/)
-
-- `celery_app.py` — Celery config, two queues: `default` and `office`
-- `tasks.py` — Task execution with retry (max 3, backoff 5/15/30s), quota refund on final failure
-- `converters/` — One module per conversion type:
-  - `pdf_to_word.py` — PyMuPDF text extraction → python-docx
-  - `word_to_pdf.py`, `excel_to_pdf.py`, `ppt_to_pdf.py` — LibreOffice headless
-  - `pdf_to_image.py` — PyMuPDF page rendering
-  - `image_to_pdf.py` — Pillow
-  - `ocr_to_word.py` — PaddleOCR-VL 1.6 cloud → python-docx
-- `services/paddle_ocr_service.py` — Cloud OCR API client
-
-Office conversions (`word_to_pdf`, `excel_to_pdf`, `ppt_to_pdf`) route to the `office` queue for isolation.
-
-### Database
-
-PostgreSQL 16, managed by Alembic. Key tables:
-- **users** — email/password, role (free/premium), daily quota tracking
-- **documents** — file metadata, physical path, expiration
-- **tasks** — conversion type, status (waiting→processing→success/failed), result path, retry count
-
-### Shared Volumes (Docker)
-
-- `upload_data` → `/tmp/uploads` (registered user files)
-- `guest_data` → `/tmp/guest` (anonymous user files)
-
-Note: Worker writes results to `/tmp/convert_*` which is NOT currently shared with the API container — this is a known deployment issue.
-
-## Environment Variables
-
-See `.env.example` for the full list. Critical ones:
-
-| Variable | Used By | Purpose |
-|----------|---------|---------|
-| `JWT_SECRET` | API | Token signing |
-| `DATABASE_URL` | API, Worker | PostgreSQL connection |
-| `REDIS_URL` | API, Worker | Celery broker + result backend |
-| `PADDLE_OCR_TOKEN` | Worker | PaddleOCR-VL cloud API auth |
-| `NEXT_PUBLIC_API_URL` | Web | API base URL (build-time baked) |
-
-## Known Issues / Gotchas
-
-1. **README documents MiMo OCR** — actual implementation uses only PaddleOCR-VL 1.6 cloud service. No MiMo fallback exists.
-2. **`NEXT_PUBLIC_API_URL` is build-time** — Docker runtime env won't override it; must be set during `next build`.
-3. **Worker Dockerfile** may not include `-Q default,office` in its CMD — tasks won't be picked up without explicit queue subscription.
-4. **Multi-page PDF→image** results are comma-joined paths; download endpoint only serves the first one.
+- `NEXT_PUBLIC_API_URL` is baked at build time. Compose passes it as a build argument; a runtime env change alone is ineffective. Use a URL reachable by the user's browser, not a container hostname.
+- `DATABASE_URL`, `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` must agree between API/dispatcher/Worker. `REDIS_URL` configures API progress access. Local WSL uses localhost; Docker uses service names.
+- `RESULT_DIR` must name the same physical shared storage for API and Worker. Compose mounts `result_data:/tmp/results` in both.
+- Migration changes metadata, not files inside an old Worker container. Preserve old `/tmp/convert_*` output before replacing that container; see the coordinated upgrade procedure.
+- Migration and new API/Worker must deploy together. Missing dispatcher leaves new tasks waiting; it is not fixed by resubmitting user requests.
+- Ordinary multi-image download serves the first output; `/pages` and `/download/{page_index}` provide per-page access. There is no archive-download contract.
+- There is no MiMo fallback, R2 adapter or automatic expiry cleanup. Do not advertise these from old documents.
+- Run integration tests only against an isolated test database. Mocked sessions/SQLite cannot establish PostgreSQL lock, JSONB or migration correctness.

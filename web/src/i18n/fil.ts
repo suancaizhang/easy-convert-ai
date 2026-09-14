@@ -226,6 +226,14 @@ const fil: TranslationKeys = {
 
   // common
   "common.fileSizeMB": "{size} MB",
+
+  // progress & cancel
+  "progress.converting_pages": "Kino-convert ang pahina {current} sa {total}",
+  "progress.converting_images": "Pinoproseso ang larawan {current} sa {total}",
+  "progress.converting_generic": "Pinoproseso {current}/{total}",
+  "cancel.button": "Kanselahin",
+  "cancel.cancelled": "Nakansela ang gawain",
+  "cancel.cannotCancel": "Pinoproseso na ang gawain, hindi na maaaring kanselahin",
 };
 
 export default fil;

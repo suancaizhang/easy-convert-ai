@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -42,7 +42,11 @@ class Task(Base):
     actual_engine: Mapped[str | None] = mapped_column(String(30))
     status: Mapped[str] = mapped_column(String(20))
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
-    result_path: Mapped[str | None] = mapped_column(String(512))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    quota_date: Mapped[date | None] = mapped_column(Date)
+    quota_refunded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_paths: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     error_message: Mapped[str | None] = mapped_column(Text)
     error_code: Mapped[str | None] = mapped_column(String(20))
     source_document_ids: Mapped[list | None] = mapped_column(JSONB)

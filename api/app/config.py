@@ -6,7 +6,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     celery_broker_url: str = "redis://redis:6379/0"
     celery_result_backend: str = "redis://redis:6379/1"
-    debug: bool = True
+    debug: bool = False
+    result_dir: str = "/tmp/results"
 
     jwt_secret: str
     jwt_algorithm: str = "HS256"

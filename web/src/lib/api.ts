@@ -30,6 +30,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new ApiError(body.detail || getTranslation("api.requestFailed"), res.status);
   }
 
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -39,7 +40,7 @@ export const api = {
     request<T>(path, { method: "POST", body: JSON.stringify(data) }),
   put: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: "PUT", body: JSON.stringify(data) }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  delete: <T = void>(path: string) => request<T>(path, { method: "DELETE" }),
   upload: async <T>(path: string, file: File, onProgress?: (pct: number) => void): Promise<T> => {
     const token =
       typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -56,15 +57,25 @@ export const api = {
       }
 
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText));
-        } else {
-          const body = JSON.parse(xhr.responseText || "{}");
-          reject(new ApiError(body.detail || getTranslation("api.uploadFailed"), xhr.status));
+        try {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(xhr.status === 204 ? undefined as T : JSON.parse(xhr.responseText));
+          } else {
+            const body = JSON.parse(xhr.responseText || "{}");
+            const message = typeof body?.detail === "string" && body.detail
+              ? body.detail
+              : getTranslation("api.uploadFailed");
+            reject(new ApiError(message, xhr.status));
+          }
+        } catch {
+          // Proxy errors may be HTML, and malformed success bodies must reject too.
+          reject(new ApiError(getTranslation("api.uploadFailed"), xhr.status));
         }
       };
 
       xhr.onerror = () => reject(new ApiError(getTranslation("api.networkError"), 0));
+      xhr.onabort = () => reject(new ApiError(getTranslation("api.uploadFailed"), 0));
+      xhr.ontimeout = () => reject(new ApiError(getTranslation("api.networkError"), 0));
 
       const formData = new FormData();
       formData.append("file", file);

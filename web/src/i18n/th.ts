@@ -226,6 +226,14 @@ const th: TranslationKeys = {
 
   // common
   "common.fileSizeMB": "{size} MB",
+
+  // progress & cancel
+  "progress.converting_pages": "กำลังแปลงหน้า {current} จาก {total}",
+  "progress.converting_images": "กำลังประมวลผลรูปภาพ {current} จาก {total}",
+  "progress.converting_generic": "กำลังประมวลผล {current}/{total}",
+  "cancel.button": "ยกเลิก",
+  "cancel.cancelled": "ยกเลิกงานแล้ว",
+  "cancel.cannotCancel": "งานกำลังดำเนินการ ไม่สามารถยกเลิกได้",
 };
 
 export default th;

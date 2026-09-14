@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { ToolStage } from "@/lib/useToolPage";
+import type { ToolStage, ProgressDetail } from "@/lib/useToolPage";
 import { FilePreview } from "@/components/preview";
 
 interface ToolPageLayoutProps {
@@ -10,15 +10,20 @@ interface ToolPageLayoutProps {
   subtitle?: string;
   stage: ToolStage;
   uploadProgress: number;
+  conversionProgress?: number;
+  progressDetail?: ProgressDetail | null;
   taskStatus: string;
   error: string;
   taskId: string;
   taskType?: string;
   canPreview?: boolean;
+  canCancel?: boolean;
   showPreview?: boolean;
   previewLabel?: string;
   downloadLabel?: string;
   convertingLabel?: string;
+  progressLabel?: string;
+  cancelLabel?: string;
   doneLabel?: string;
   backLabel?: string;
   uploadingLabel?: string;
@@ -29,6 +34,7 @@ interface ToolPageLayoutProps {
   onPreview?: () => void;
   onClosePreview?: () => void;
   onReset: () => void;
+  onCancel?: () => void;
   /** Extra actions in the done/error stage (e.g. delete button) */
   extraActions?: ReactNode;
   /** Footer content shown in idle stage below children (e.g. guest note) */
@@ -42,15 +48,20 @@ export function ToolPageLayout({
   subtitle,
   stage,
   uploadProgress,
+  conversionProgress = 0,
+  progressDetail,
   taskStatus,
   error,
   taskId,
   taskType,
   canPreview = false,
+  canCancel = false,
   showPreview = false,
   previewLabel = "预览",
   downloadLabel = "下载",
   convertingLabel = "处理中...",
+  progressLabel,
+  cancelLabel = "取消",
   doneLabel = "处理完成",
   backLabel = "返回首页",
   uploadingLabel,
@@ -61,6 +72,7 @@ export function ToolPageLayout({
   onPreview,
   onClosePreview,
   onReset,
+  onCancel,
   extraActions,
   footer,
   children,
@@ -98,8 +110,37 @@ export function ToolPageLayout({
           <div className="text-center space-y-4 py-8">
             <div className="animate-spin w-10 h-10 border-4 border-brand-surface border-t-brand rounded-full mx-auto" />
             <p className="text-secondary">{convertingLabel}</p>
-            {taskStatus && (
+
+            {/* Progress bar */}
+            {conversionProgress > 0 && (
+              <div className="w-full max-w-md mx-auto space-y-1">
+                <div className="w-full h-2 bg-brand-surface rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-brand rounded-full transition-all duration-300"
+                    style={{ width: `${conversionProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted">
+                  {progressLabel
+                    ?? (progressDetail
+                      ? `${progressDetail.current} / ${progressDetail.total}`
+                      : `${conversionProgress}%`)}
+                </p>
+              </div>
+            )}
+
+            {taskStatus && !conversionProgress && (
               <p className="text-sm text-muted">{statusLabel ?? `状态：${taskStatus}`}</p>
+            )}
+
+            {/* Cancel button — only when task is still waiting in queue */}
+            {canCancel && onCancel && (
+              <button
+                onClick={onCancel}
+                className="text-sm text-muted hover:text-error-fg font-ui"
+              >
+                {cancelLabel}
+              </button>
             )}
           </div>
         )}

@@ -32,7 +32,6 @@ redis_data/
 
 # Local docs & tools
 .kiro/
-DEPLOYMENT.md
 docs/superpowers/
 infographic/
 knowledge/

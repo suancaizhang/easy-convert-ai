@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -16,29 +16,34 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
+        raise HTTPException(status_code=401, detail="未登录")
     payload = decode_access_token(credentials.credentials)
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token 无效或已过期")
-    user_id = payload.get("sub")
+    try:
+        user_id = UUID(payload["sub"]) if payload else None
+    except (KeyError, ValueError, TypeError, AttributeError):
+        user_id = None
     if user_id is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token 无效")
-    user = db.query(User).filter(User.id == UUID(user_id)).first()
+        raise HTTPException(status_code=401, detail="Token 无效或已过期")
+    user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+        raise HTTPException(status_code=401, detail="用户不存在")
     return user
 
 
 def get_optional_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User | None:
-    if credentials is None:
+    if credentials is None and not request.headers.get("authorization"):
         return None
-    payload = decode_access_token(credentials.credentials)
-    if payload is None:
-        return None
-    user_id = payload.get("sub")
-    if user_id is None:
-        return None
-    return db.query(User).filter(User.id == UUID(user_id)).first()
+    return get_current_user(credentials, db)
+
+
+def require_owner(owner_id: UUID | None, user: User | None) -> None:
+    """Ownerless guest resources retain their existing UUID-capability policy."""
+    if owner_id is not None:
+        if user is None:
+            raise HTTPException(status_code=401, detail="此资源需要登录")
+        if owner_id != user.id:
+            raise HTTPException(status_code=403, detail="无权访问此资源")

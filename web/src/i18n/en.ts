@@ -226,6 +226,14 @@ const en: TranslationKeys = {
 
   // common
   "common.fileSizeMB": "{size} MB",
+
+  // progress & cancel
+  "progress.converting_pages": "Converting page {current} of {total}",
+  "progress.converting_images": "Processing image {current} of {total}",
+  "progress.converting_generic": "Processing {current}/{total}",
+  "cancel.button": "Cancel",
+  "cancel.cancelled": "Task cancelled",
+  "cancel.cannotCancel": "Task already processing, cannot cancel",
 };
 
 export default en;

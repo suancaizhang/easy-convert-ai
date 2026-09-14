@@ -226,6 +226,14 @@ const ms: TranslationKeys = {
 
   // common
   "common.fileSizeMB": "{size} MB",
+
+  // progress & cancel
+  "progress.converting_pages": "Menukar halaman {current} daripada {total}",
+  "progress.converting_images": "Memproses imej {current} daripada {total}",
+  "progress.converting_generic": "Memproses {current}/{total}",
+  "cancel.button": "Batal",
+  "cancel.cancelled": "Tugas dibatalkan",
+  "cancel.cannotCancel": "Tugas sedang diproses, tidak boleh dibatalkan",
 };
 
 export default ms;

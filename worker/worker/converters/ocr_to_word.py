@@ -114,45 +114,54 @@ class OcrToWordConverter(DocumentConverter):
             pdf_doc = fitz.open(input_path)
         else:
             # 图片先转为单页 PDF
-            img = Image.open(input_path).convert("RGB")
-            img_bytes = io.BytesIO()
-            img.save(img_bytes, format="PDF")
-            img_bytes.seek(0)
-            pdf_doc = fitz.open(stream=img_bytes.read(), filetype="pdf")
-
-        for page_idx, page in enumerate(result.pages):
-            if page_idx >= len(pdf_doc):
-                break
-            pdf_page = pdf_doc[page_idx]
-            page_height = pdf_page.rect.height
-
-            # 提取纯文本行，按位置估算坐标
-            lines = [l.strip() for l in page.markdown_text.split("\n") if l.strip()]
-            if not lines:
-                continue
-
-            line_height = page_height / max(len(lines), 1)
-            for line_idx, line in enumerate(lines):
-                # 去除 markdown 标记
-                clean = re.sub(r"^#{1,6}\s+", "", line)
-                clean = re.sub(r"\*\*(.+?)\*\*", r"\1", clean)
-                clean = re.sub(r"\*(.+?)\*", r"\1", clean)
-                clean = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", clean).strip()
-                if not clean:
-                    continue
-
-                y = line_idx * line_height + line_height * 0.8
-                # render_mode=3 → 隐形文字（不可见但可选中/复制/搜索）
-                pdf_page.insert_text(
-                    fitz.Point(0, y),
-                    clean,
-                    fontsize=line_height * 0.7,
-                    render_mode=3,
-                )
+            with Image.open(input_path) as image:
+                img_bytes = io.BytesIO()
+                image.convert("RGB").save(img_bytes, format="PDF")
+            pdf_doc = fitz.open(stream=img_bytes.getvalue(), filetype="pdf")
 
         output_path = os.path.join(output_dir, f"{uuid.uuid4()}.pdf")
-        pdf_doc.save(output_path)
-        pdf_doc.close()
+        with pdf_doc:
+            if len(result.pages) != len(pdf_doc) or result.total_pages != len(pdf_doc):
+                raise RuntimeError("OCR page count does not match the source document")
+
+            # Bundled Droid Sans Fallback: no system fonts or extra package needed.
+            # TextWriter embeds a Unicode font instead of insert_text's Latin font.
+            font = fitz.Font("cjk")
+            for page_idx, page in enumerate(result.pages):
+                pdf_page = pdf_doc[page_idx]
+                lines = []
+                for line in page.markdown_text.splitlines():
+                    clean = re.sub(r"^#{1,6}\s+", "", line.strip())
+                    clean = re.sub(r"\*\*(.+?)\*\*", r"\1", clean)
+                    clean = re.sub(r"\*(.+?)\*", r"\1", clean)
+                    clean = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", clean).strip()
+                    if clean:
+                        lines.append(clean)
+                if not lines:
+                    continue
+
+                # Markdown has no bounding boxes: these are estimated line slots,
+                # not a reconstruction of the original OCR selection geometry.
+                # Work in unrotated coordinates, as required by PyMuPDF.
+                rotation = pdf_page.rotation
+                pdf_page.set_rotation(0)
+                rect = pdf_page.rect
+                margin = min(12, rect.width * 0.05, rect.height * 0.05)
+                width = rect.width - 2 * margin
+                line_height = (rect.height - 2 * margin) / len(lines)
+                writer = fitz.TextWriter(rect)
+                for line_idx, line in enumerate(lines):
+                    fontsize = min(
+                        12,
+                        line_height * 0.8 / (font.ascender - font.descender),
+                        width / max(font.text_length(line, fontsize=1), 1),
+                    )
+                    y = margin + line_idx * line_height + font.ascender * fontsize
+                    writer.append((margin, y), line, font=font, fontsize=fontsize)
+                writer.write_text(pdf_page, render_mode=3)
+                pdf_page.set_rotation(rotation)
+
+            pdf_doc.save(output_path, deflate=True)
 
         return ConvertResult(
             output_path=output_path,

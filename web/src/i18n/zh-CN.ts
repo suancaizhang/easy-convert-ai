@@ -226,6 +226,14 @@ const zhCN: TranslationKeys = {
 
   // common
   "common.fileSizeMB": "{size} MB",
+
+  // progress & cancel
+  "progress.converting_pages": "正在转换第 {current} 页，共 {total} 页",
+  "progress.converting_images": "正在处理第 {current} 张，共 {total} 张",
+  "progress.converting_generic": "处理中 {current}/{total}",
+  "cancel.button": "取消",
+  "cancel.cancelled": "任务已取消",
+  "cancel.cannotCancel": "任务已开始处理，无法取消",
 };
 
 export default zhCN;

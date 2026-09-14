@@ -1,7 +1,11 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+# progress_callback(current, total) — called by converters that support it
+ProgressCallback = Callable[[int, int], None] | None
 
 
 class OutputFormat(str, Enum):

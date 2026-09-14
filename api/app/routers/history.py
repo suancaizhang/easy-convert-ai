@@ -39,7 +39,10 @@ def get_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Document).filter(Document.user_id == current_user.id)
+    owned_task_documents = db.query(Task.document_id).filter(Task.user_id == current_user.id)
+    query = db.query(Document).filter(
+        (Document.user_id == current_user.id) | Document.id.in_(owned_task_documents)
+    )
     total = query.count()
     docs = (
         query.order_by(Document.created_at.desc())
@@ -53,23 +56,11 @@ def get_history(
 
     doc_ids = [doc.id for doc in docs]
 
-    latest_task_subq = (
-        db.query(
-            Task.document_id,
-            func.max(Task.created_at).label("max_created"),
-        )
-        .filter(Task.document_id.in_(doc_ids))
-        .group_by(Task.document_id)
-        .subquery()
-    )
-
     latest_tasks = (
         db.query(Task)
-        .join(
-            latest_task_subq,
-            (Task.document_id == latest_task_subq.c.document_id)
-            & (Task.created_at == latest_task_subq.c.max_created),
-        )
+        .filter(Task.document_id.in_(doc_ids), Task.user_id == current_user.id)
+        .distinct(Task.document_id)
+        .order_by(Task.document_id, Task.created_at.desc(), Task.id.desc())
         .all()
     )
 

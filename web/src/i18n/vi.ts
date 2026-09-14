@@ -226,6 +226,14 @@ const vi: TranslationKeys = {
 
   // common
   "common.fileSizeMB": "{size} MB",
+
+  // progress & cancel
+  "progress.converting_pages": "Đang chuyển đổi trang {current}/{total}",
+  "progress.converting_images": "Đang xử lý ảnh {current}/{total}",
+  "progress.converting_generic": "Đang xử lý {current}/{total}",
+  "cancel.button": "Hủy",
+  "cancel.cancelled": "Đã hủy tác vụ",
+  "cancel.cannotCancel": "Tác vụ đang xử lý, không thể hủy",
 };
 
 export default vi;

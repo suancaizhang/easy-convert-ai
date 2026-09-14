@@ -6,7 +6,7 @@ from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-from worker.converters import ConvertResult, DocumentConverter, OutputFormat
+from worker.converters import ConvertResult, DocumentConverter, OutputFormat, ProgressCallback
 
 
 class PdfToWordConverter(DocumentConverter):
@@ -18,16 +18,25 @@ class PdfToWordConverter(DocumentConverter):
     def output_format(self) -> OutputFormat:
         return OutputFormat.DOCX
 
-    def convert(self, input_path: str, output_dir: str, params: dict | None = None) -> ConvertResult:
+    def convert(
+        self,
+        input_path: str,
+        output_dir: str,
+        params: dict | None = None,
+        progress_callback: ProgressCallback = None,
+    ) -> ConvertResult:
         pdf = fitz.open(input_path)
         doc = Document()
+        total = len(pdf)
 
-        for page_num in range(len(pdf)):
+        for page_num in range(total):
             page = pdf[page_num]
             page_width = page.rect.width
 
             # Extract text with formatting using "dict" mode
-            page_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
+            page_dict = page.get_text(
+                "dict", flags=fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_PRESERVE_IMAGES
+            )
 
             for block in page_dict.get("blocks", []):
                 # Image block
@@ -107,6 +116,9 @@ class PdfToWordConverter(DocumentConverter):
 
             if page_num < len(pdf) - 1:
                 doc.add_page_break()
+
+            if progress_callback:
+                progress_callback(page_num + 1, total)
 
         output_name = f"{uuid.uuid4()}.docx"
         output_path = os.path.join(output_dir, output_name)

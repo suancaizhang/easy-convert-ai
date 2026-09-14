@@ -1,13 +1,32 @@
 # Issue: OCR 引擎从 DeepSeek 迁移至小米 MiMo v2.5
 
-- **状态**: ✅ 已实现
+- **状态**: 历史方案，已不适用于当前实现
 - **优先级**: P1
 - **标签**: `enhancement`, `backend`, `ocr`
 - **创建日期**: 2026-07-14
 
 ---
 
-## 问题描述
+## 当前状态（2026-09-12 更新）
+
+当前代码只使用 **PaddleOCR-VL 1.6 云服务**，没有MiMo、DeepSeek或本地fallback。请勿依据本文后面的历史方案配置 `MIMO_API_KEY` 或推断双引擎已经实现。
+
+|项目|当前实现|
+|---|---|
+|转换入口|`worker/worker/converters/ocr_to_word.py`|
+|云服务客户端|`worker/worker/services/paddle_vl.py`|
+|凭据|`PADDLE_OCR_TOKEN`|
+|任务类型|`ocr_to_word`，服务端要求登录|
+|输入|PDF、PNG、JPEG、WebP|
+|输出选择|`params.output_format`：`docx`、`txt`、`searchable_pdf`|
+|引擎选择|`ocr_mode` 不改变当前Worker引擎|
+|验证边界|本地fixture覆盖输出内容与坏页拒绝；收费云OCR完整链路未实测|
+
+依据：[OCR输出格式ADR](../adr/0002-ocr-single-task-type-with-output-format-param.md)、[全项目审查及整改记录](04-project-audit-2026-09-12.md)、[部署指南](../../DEPLOYMENT.md)。外部OCR作业恢复与计费幂等仍是未关闭风险。
+
+以下内容仅保留历史背景，涉及的接口、配置与“变更内容”**不代表当前代码状态，也不是部署步骤**。
+
+## 历史问题描述
 
 原 OCR 双引擎方案使用 PaddleOCR + DeepSeek（fallback），但存在以下问题：
 

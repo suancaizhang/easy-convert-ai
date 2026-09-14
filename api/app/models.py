@@ -1,8 +1,9 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -88,7 +89,11 @@ class Task(Base):
         String(20), default="waiting", server_default="waiting"
     )
     retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    result_path: Mapped[str | None] = mapped_column(String(512))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    quota_date: Mapped[date | None] = mapped_column(Date)
+    quota_refunded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_paths: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     error_message: Mapped[str | None] = mapped_column(Text)
     error_code: Mapped[str | None] = mapped_column(String(20))
     source_document_ids: Mapped[list | None] = mapped_column(JSONB)

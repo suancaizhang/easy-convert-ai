@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user, get_optional_user
+from app.deps import get_optional_user, require_owner
+from app.task_service import valid_result_path
 from app.models import User, Document, Task
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -100,32 +101,27 @@ def delete_document(
     db: Session = Depends(get_db),
 ):
     """删除文档及其关联的任务记录和物理文件"""
-    doc = db.query(Document).filter(Document.id == document_id).first()
-
+    doc = (db.query(Document).filter(Document.id == document_id)
+           .populate_existing().with_for_update().first())
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
+    require_owner(doc.user_id, current_user)
+    referenced_tasks = db.query(Task).filter(
+        (Task.document_id == document_id) | Task.source_document_ids.contains([str(document_id)])
+    ).all()
+    for task in referenced_tasks:
+        if task.error_code == "ERR_ACCESS":
+            raise HTTPException(status_code=403, detail="任务来源权限无法确认")
+        require_owner(task.user_id, current_user)
+        if task.status in {"waiting", "processing"}:
+            raise HTTPException(status_code=409, detail="文档仍被活动任务引用，请先取消任务")
 
-    # 鉴权：登录用户只能删除自己的文档；游客上传的文档(user_id=None)仅允许游客删除
-    if doc.user_id is not None:
-        if current_user is None or current_user.id != doc.user_id:
-            raise HTTPException(status_code=404, detail="文档不存在")
-    else:
-        # 游客文档：已登录用户不能删除游客文档
-        if current_user is not None:
-            raise HTTPException(status_code=404, detail="文档不存在")
+    files_to_remove = {doc.oss_path} if doc.oss_path else set()
+    for task in referenced_tasks:
+        if task.document_id == document_id:
+            files_to_remove.update(path for path in task.result_paths if valid_result_path(path))
 
-    # 收集需要清理的物理文件路径
-    files_to_remove: list[str] = []
-    if doc.oss_path:
-        files_to_remove.append(doc.oss_path)
-
-    tasks = db.query(Task).filter(Task.document_id == document_id).all()
-    for task in tasks:
-        if task.result_path:
-            files_to_remove.append(task.result_path)
-
-    # 级联删除关联任务，再删除文档
-    db.query(Task).filter(Task.document_id == document_id).delete()
+    db.query(Task).filter(Task.document_id == document_id).delete(synchronize_session=False)
     db.delete(doc)
     db.commit()
 
