@@ -102,11 +102,13 @@ class ConversionIntegrityTests(unittest.TestCase):
         )
         document = Document(result.output_path)
         self.assertIn("Caption", "\n".join(p.text for p in document.paragraphs))
-        self.assertEqual(len(document.inline_shapes), 1)
-        shape = document.inline_shapes[0]
-        relation_id = shape._inline.graphic.graphicData.pic.blipFill.blip.embed
-        with Image.open(io.BytesIO(document.part.related_parts[relation_id].blob)) as image:
-            self.assertEqual(image.convert("RGB").getpixel((32, 32)), (255, 0, 0))
+        colors = []
+        for shape in document.inline_shapes:
+            relation_id = shape._inline.graphic.graphicData.pic.blipFill.blip.embed
+            with Image.open(io.BytesIO(document.part.related_parts[relation_id].blob)) as image:
+                colors.append(image.convert("RGB").getpixel((32, 32)))
+        self.assertIn((255, 0, 0), colors)  # Embedded source image.
+        self.assertIn((0, 0, 255), colors)  # Previously lost vector background.
         self.assertEqual(progress, [(1, 1)])
 
     def test_searchable_pdf_preserves_chinese_and_original_pixels(self):

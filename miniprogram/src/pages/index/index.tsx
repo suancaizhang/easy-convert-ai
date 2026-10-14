@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Taro, { useLoad } from '@tarojs/taro'
 import { Button, Input, Text, View } from '@tarojs/components'
 import { createTask, fetchQuota, uploadDocument } from '../../api'
-import { CONVERSIONS, GROUPS, type ConversionDef } from '../../conversions'
+import { buildParams, CONVERSIONS, GROUPS, type ConversionDef } from '../../conversions'
 import { getToken } from '../../utils/storage'
 import { pickFiles, pickImages } from '../../utils/wechat'
 import './index.scss'
@@ -64,6 +64,13 @@ export default function Index() {
       Taro.reLaunch({ url: '/pages/login/index' })
       return
     }
+    let params: Record<string, string | number>
+    try {
+      params = buildParams(active, values)
+    } catch (e) {
+      Taro.showToast({ title: (e as Error).message, icon: 'none' })
+      return
+    }
     setBusy(true)
     setProgress('正在上传文件…')
     try {
@@ -72,19 +79,6 @@ export default function Index() {
         docs.push(await uploadDocument(f.path))
       }
       setProgress('正在创建任务…')
-      const params: Record<string, string | number> = {}
-      for (const p of active.params || []) {
-        const v = values[p.key] ?? p.default
-        if (p.kind === 'input' && !String(v ?? '').trim()) {
-          Taro.showToast({ title: `请填写${p.label}`, icon: 'none' })
-          setBusy(false)
-          setProgress('')
-          return
-        }
-        if (v !== undefined && v !== '') {
-          params[p.key] = p.numeric ? Number(v) : String(v)
-        }
-      }
       const task = await createTask({
         document_id: docs[0].id,
         task_type: active.type,
@@ -154,6 +148,7 @@ export default function Index() {
                   className='param-input'
                   value={values[p.key] || ''}
                   placeholder={p.placeholder || '请输入'}
+                  maxlength={p.maxLength ?? -1}
                   onInput={(e) => setValues({ ...values, [p.key]: e.detail.value })}
                 />
               )}

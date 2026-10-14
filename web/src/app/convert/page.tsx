@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -102,7 +102,8 @@ export default function ConvertPage() {
 }
 
 function ConvertPageInner() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const router = useRouter();
   const { t } = useI18n();
   const searchParams = useSearchParams();
 
@@ -180,10 +181,14 @@ function ConvertPageInner() {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
     if (f) handleFileSelect(f);
-  }, [presetTaskType]);
+  }, [presetTaskType, t]);
 
   const handleUploadAndConvert = async () => {
-    if (!file || !taskType) return;
+    if (!file || !taskType || loading) return;
+    if (taskType === "ocr_to_word" && !user) {
+      router.push("/login");
+      return;
+    }
     setLocalError("");
     await tool.uploadAndRun([file]);
   };
@@ -260,6 +265,10 @@ function ConvertPageInner() {
       title={pageTitle}
       stage={tool.stage}
       uploadProgress={tool.uploadProgress}
+      conversionProgress={tool.conversionProgress}
+      progressDetail={tool.progressDetail}
+      canCancel={tool.canCancel}
+      onCancel={tool.cancel}
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
@@ -272,7 +281,6 @@ function ConvertPageInner() {
       doneLabel={t("convert.done")}
       backLabel={t("nav.backHome")}
       uploadingLabel={t("convert.uploading", { progress: tool.uploadProgress })}
-      statusLabel={t("convert.status", { status: tool.taskStatus })}
       retryLabel={t("convert.retry")}
       continueLabel={t("convert.continue")}
       onDownload={tool.download}
@@ -358,9 +366,18 @@ function ConvertPageInner() {
         </div>
       )}
 
+      {!loading && !user && taskType === "ocr_to_word" && (
+        <p className="text-center text-sm text-amber-600 bg-amber-50 rounded-md px-3 py-2">
+          {t("ocr.loginRequired")}
+          <a href="/login" className="font-medium underline hover:text-amber-800">
+            {t("ocr.loginLink")}
+          </a>
+        </p>
+      )}
+
       <button
         onClick={handleUploadAndConvert}
-        disabled={!file || !taskType}
+        disabled={!file || !taskType || loading}
         className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed font-ui"
       >
         {t("convert.startConvert")}

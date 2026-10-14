@@ -5,13 +5,14 @@ import tempfile
 from uuid import UUID
 
 from celery.exceptions import Reject, Retry
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from worker.celery_app import app
 from worker.database import SessionLocal, engine
 from worker.models import Task, Document
 from worker.progress import report_progress
+from worker.services.paddle_vl import OcrSubmissionRejected, OcrSubmissionUncertain
 from worker.converters.pdf_to_word import PdfToWordConverter
 from worker.converters.word_to_pdf import WordToPdfConverter
 from worker.converters.excel_to_pdf import ExcelToPdfConverter
@@ -62,6 +63,33 @@ def _input_path(db, task: Task) -> str:
     return ",".join(paths)
 
 
+class _OcrJobStore:
+    """Use only the session pinned to this execution's advisory lock."""
+
+    def __init__(self, db, task: Task):
+        self.db = db
+        self.task = task
+
+    def begin_submission(self) -> str | None:
+        if self.task.ocr_job_state == "submitted" and self.task.ocr_job_id:
+            return self.task.ocr_job_id
+        claimed = self.db.execute(update(Task).where(
+            Task.id == self.task.id,
+            Task.status == "processing",
+            Task.ocr_job_state.is_(None),
+            Task.ocr_job_id.is_(None),
+        ).values(ocr_job_state="submitting"))
+        if claimed.rowcount != 1:
+            raise OcrSubmissionUncertain("OCR submission outcome requires reconciliation")
+        self.db.commit()
+        return None
+
+    def record_job(self, job_id: str) -> None:
+        self.task.ocr_job_id = job_id
+        self.task.ocr_job_state = "submitted"
+        self.db.commit()
+
+
 def _execute_conversion(db, execution, task_id: UUID) -> None:
     output_dir = None
     task = db.query(Task).filter(Task.id == task_id).with_for_update().first()
@@ -73,6 +101,12 @@ def _execute_conversion(db, execution, task_id: UUID) -> None:
         task.error_message = None
         task.error_code = None
         db.commit()
+        if task.task_type == "ocr_to_word" and (
+            task.ocr_job_state in {"submitting", "uncertain"}
+            or (task.ocr_job_state == "submitted" and not task.ocr_job_id)
+            or (task.ocr_job_state is None and task.ocr_job_id is not None)
+        ):
+            raise OcrSubmissionUncertain("OCR submission outcome requires reconciliation")
         converter_cls = CONVERTER_MAP.get(task.task_type)
         if converter_cls is None:
             raise ValueError("不支持的转换类型")
@@ -81,7 +115,10 @@ def _execute_conversion(db, execution, task_id: UUID) -> None:
         os.makedirs(result_root, exist_ok=True)
         output_dir = tempfile.mkdtemp(prefix=f"{task_id}_", dir=result_root)
         converter = converter_cls()
-        if task.task_type in PROGRESS_CONVERTERS:
+        if task.task_type == "ocr_to_word":
+            result = converter.convert(input_path, output_dir, task.params,
+                                       job_store=_OcrJobStore(db, task))
+        elif task.task_type in PROGRESS_CONVERTERS:
             result = converter.convert(input_path, output_dir, task.params,
                                        progress_callback=lambda current, total: report_progress(str(task_id), current, total))
         else:
@@ -107,8 +144,17 @@ def _execute_conversion(db, execution, task_id: UUID) -> None:
         task = db.query(Task).filter(Task.id == task_id).populate_existing().with_for_update().first()
         if task is None or task.status in {"success", "failed"}:
             return
+        if isinstance(error, OcrSubmissionUncertain):
+            task.status = "failed"
+            task.ocr_job_state = "uncertain"
+            task.error_code = "ERR_OCR_UNCERTAIN"
+            task.error_message = "OCR提交结果不确定，已停止自动重试；配额暂不退还，请联系管理员核对服务商任务及计费记录"
+            db.commit()
+            return
         if isinstance(error, ValueError) or task.retry_count >= execution.max_retries:
             task.status = "failed"
+            if isinstance(error, OcrSubmissionRejected):
+                task.ocr_job_state = "rejected"
             task.error_code = "ERR_003" if isinstance(error, ValueError) else "ERR_005"
             task.error_message = str(error) if isinstance(error, ValueError) else "转换失败，已达最大重试次数"
             _refund_quota(db, task)

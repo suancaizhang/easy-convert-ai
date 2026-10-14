@@ -6,9 +6,11 @@ from app.config import settings
 from app.database import engine
 from app.redis_client import redis_client
 from app.routers import auth, documents, quota, tasks, history
+from app.upload_limits import RequestSizeLimitMiddleware
 
 app = FastAPI(title="Easy Convert AI", version="0.1.0")
 
+app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

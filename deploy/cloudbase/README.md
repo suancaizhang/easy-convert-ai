@@ -1,5 +1,7 @@
 # 微信云托管（CloudBase Run）部署指南
 
+> **2026-10-09：本文件下文保留现有HTTP/共享目录部署说明，不作为正式微信上线操作清单。** 正式目标已转向callContainer、签名COS、托管PostgreSQL/Redis、CFS仅processor和独立迁移；这些尚未在代码中落地。先按[设计](../../docs/superpowers/specs/2026-09-15-wechat-cloudbase-launch-design.md)与[修订计划](../../docs/superpowers/plans/2026-09-15-wechat-cloudbase-launch.md)解除门禁并完成真实验收，不能直接按旧四服务/公网默认域名步骤上线。005已用于OCR恢复，云存储接006；未取得授权不创建、删除云资源或调用收费OCR。
+
 > 指南给出推荐架构与必填配置；控制台字段名/入口可能随平台迭代调整，**具体点击路径以云托管控制台实际界面为准**。架构与依赖关系（服务拆分、CFS 挂载共享、环境变量）以此文档为准。
 
 将 api / dispatcher / worker 原样跑在微信云托管：免 ICP 备案，默认域名 `*.tcloudbase.com` 直接配置为小程序合法域名（官方默认域名标注“开发测试”用途，竞赛演示可接受；生产建议后续绑定备案自定义域名）。
@@ -14,6 +16,8 @@
 | redis | `redis:7-alpine`（appendonly） | 否 | 6379 | CFS 挂 `/data` |
 
 `processor` 一个容器内同时跑 durability dispatcher（`python -m app.dispatcher`）与 Celery worker（`-Q default,office`），配 `health_server.py` 提供 HTTP 探活。
+
+升级到005时先停旧processor并备份，再启动新API执行迁移，最后启动同版本processor；不能让旧Worker与新OCR恢复字段混跑。旧活动OCR的隔离、`ERR_OCR_UNCERTAIN`人工核对及禁止丢失job恢复证据的回退限制，见[协调升级流程](../../DEPLOYMENT.md#005-ocr恢复字段升级)。
 
 ## 1. 前置（你侧，10 分钟内）
 
@@ -31,7 +35,7 @@
 | api / processor | `<cfs-id>:/`（或 /shared） | `/tmp` | 源文件、guest、`/tmp/results` 全部落 CFS，两服务天然共享（满足 `RESULT_DIR` 同一物理存储的约束） |
 | postgres | `<cfs-id2>:/pgdata` | `/var/lib/postgresql/data` | 数据库持久化 |
 
-> 挂载 `/tmp` 会把镜像内 `/tmp` 内容遮住；本应用不依赖镜像内 `/tmp`，可接受。若想分离，挂 `/mnt/cfs` 并设 `RESULT_DIR=/mnt/cfs/results`、`TMPDIR`。CFS 为网络文件系统，低频小文件写入无压力；高频热数据应用层已避免。
+> API 与 processor 必须将同一 CFS 目录挂载到 `/tmp`，或分别将同一批共享目录挂载到两者的 `/tmp/uploads`、`/tmp/guest` 和 `/tmp/results`。源文件目录固定为 `/tmp/uploads`、`/tmp/guest`；只挂 `/mnt/cfs` 并设置 `RESULT_DIR` / `TMPDIR` 不会迁移源文件目录，会导致 processor 找不到输入。挂载 `/tmp` 会遮住镜像原有的该目录内容；上线前以跨服务上传、转换及下载确认挂载实际一致。
 
 ## 3. 镜像构建与推送
 

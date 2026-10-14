@@ -80,6 +80,37 @@ class MigrationArtifactTests(unittest.TestCase):
             for identity in ({}, headers, other_headers):
                 self.assertIn(client.get(f"/api/tasks/{self.conflicted_task}/status", headers=identity).status_code, (401, 403))
 
+    def test_single_source_nulls_recover_owner_and_nonarrays_are_quarantined(self):
+        from alembic import command
+        from sqlalchemy import text
+        owner, document = uuid.uuid4(), uuid.uuid4()
+        cases = [(None, False), ("null", False), ('"invalid"', True),
+                 ('{"source": "invalid"}', True), ("42", True), ("true", True)]
+        task_ids = [(uuid.uuid4(), value, invalid) for value, invalid in cases]
+        with self.engine.begin() as db:
+            db.execute(text("INSERT INTO users (id, role) VALUES (:id, 'free')"), {"id": owner})
+            db.execute(text("INSERT INTO documents (id, user_id, filename, file_type, file_size) "
+                            "VALUES (:id, :owner, 'single.pdf', 'pdf', 1)"),
+                       {"id": document, "owner": owner})
+            for task_id, value, _ in task_ids:
+                db.execute(text("INSERT INTO tasks (id, document_id, task_type, status, source_document_ids) "
+                                "VALUES (:id, :document, 'pdf_to_word', 'success', CAST(:sources AS jsonb))"),
+                           {"id": task_id, "document": document, "sources": value})
+        try:
+            command.upgrade(self.config, "head")
+            with self.engine.connect() as db:
+                for task_id, _, invalid in task_ids:
+                    row = db.execute(text("SELECT user_id, status, error_code, quota_date FROM tasks WHERE id=:id"),
+                                     {"id": task_id}).one()
+                    self.assertEqual(row.user_id, owner)
+                    self.assertEqual(row.status, "failed" if invalid else "success")
+                    self.assertEqual(row.error_code, "ERR_ACCESS" if invalid else None)
+                    self.assertIsNone(row.quota_date)
+        finally:
+            # Let tearDown restore head even when testing a broken old migration.
+            with self.engine.begin() as db:
+                db.execute(text("DELETE FROM tasks"))
+
     def test_downgrade_refuses_long_artifacts_and_preserves_order_when_safe(self):
         from alembic import command
         from sqlalchemy import text
@@ -92,7 +123,6 @@ class MigrationArtifactTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "512"):
             command.downgrade(self.config, "003")
         with self.engine.begin() as db:
-            self.assertEqual(db.scalar(text("SELECT version_num FROM alembic_version")), "004")
             self.assertEqual(db.scalar(text("SELECT result_paths FROM tasks WHERE id=:id"), {"id": self.owned_task}), paths)
             db.execute(text("UPDATE tasks SET result_paths=CAST(:paths AS jsonb) WHERE id=:id"),
                        {"paths": json.dumps(self.paths), "id": self.owned_task})

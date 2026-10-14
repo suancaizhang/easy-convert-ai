@@ -1,9 +1,10 @@
 import os
 import uuid
 
-import fitz  # PyMuPDF
+import fitz
 
 from worker.converters import ConvertResult, DocumentConverter, OutputFormat, ProgressCallback
+from worker.converters.resource_limits import MAX_OUTPUT_BYTES, check_pdf_raster_budget
 
 MAX_PAGES = 50
 
@@ -24,34 +25,34 @@ class PdfToImageConverter(DocumentConverter):
         params: dict | None = None,
         progress_callback: ProgressCallback = None,
     ) -> ConvertResult:
-        pdf = fitz.open(input_path)
-
-        if len(pdf) > MAX_PAGES:
-            pdf.close()
-            raise ValueError(f"PDF 超过 {MAX_PAGES} 页限制，请分批处理")
-
-        total = len(pdf)
         output_paths = []
-        for page_num in range(total):
-            page = pdf[page_num]
-            # 150 DPI
-            mat = fitz.Matrix(150 / 72, 150 / 72)
-            pix = page.get_pixmap(matrix=mat)
-            img_name = f"{uuid.uuid4()}.png"
-            img_path = os.path.join(output_dir, img_name)
-            pix.save(img_path)
-            output_paths.append(img_path)
-            if progress_callback:
-                progress_callback(page_num + 1, total)
+        total_size = 0
+        try:
+            with fitz.open(input_path) as pdf:
+                check_pdf_raster_budget(pdf, dpi=150, max_pages=MAX_PAGES)
+                total = len(pdf)
+                matrix = fitz.Matrix(150 / 72, 150 / 72)
+                for page_num, page in enumerate(pdf):
+                    pix = page.get_pixmap(matrix=matrix)
+                    img_path = os.path.join(output_dir, f"{uuid.uuid4()}.png")
+                    output_paths.append(img_path)
+                    pix.save(img_path)
+                    del pix
+                    total_size += os.path.getsize(img_path)
+                    if total_size > MAX_OUTPUT_BYTES:
+                        raise ValueError("输出文件超过安全大小限制，请分批处理")
+                    if progress_callback:
+                        progress_callback(page_num + 1, total)
+        except Exception:
+            for path in output_paths:
+                if os.path.exists(path):
+                    os.remove(path)
+            raise
 
-        page_count = len(pdf)
-        pdf.close()
-
-        total_size = sum(os.path.getsize(p) for p in output_paths)
         return ConvertResult(
             output_path=output_paths[0] if output_paths else "",
             output_paths=output_paths,
             file_size=total_size,
-            page_count=page_count,
+            page_count=total,
             metadata={"engine": "pymupdf", "dpi": 150},
         )

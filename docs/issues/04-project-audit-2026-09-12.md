@@ -1,5 +1,58 @@
 # 全项目代码审查与严重问题整改记录
 
+## 2026-10-14 提交前 P1 补充修复
+
+- 未核对的 OCR 提交证据（`ERR_OCR_UNCERTAIN` 或不一致/未知恢复状态）现在阻止删除锚点文档；人工核对完成并写入已解决状态后，普通删除继续可用。
+- 供应商明确拒绝提交（HTTP 400、401、403、413、415、422）不再被归类为未知收费作业：Worker 终止任务并退还应用配额；超时、断连、服务器错误及其他不明确响应仍按未知提交保留配额并要求人工核对。
+
+### 本次执行证据
+
+|范围|结果|证据边界|
+|---|---|---|
+|API / migration / Worker 生命周期|51/51 通过|一次性 PostgreSQL 16；含未解决 OCR 删除阻断、已解决后删除、任务归属拒绝、明确拒绝退款、未知提交不退款、锁与迁移回归|
+|Worker 转换与 OCR 边界|24/24 通过|Worker 完整 unittest；明确拒绝使用本地 fixture，不调用收费 OCR|
+
+本次没有运行真实微信、收费供应商、Docker 或 CloudBase 验收。其它尚未关闭的转换器表单/透明图片/像素预算问题及 Web 下载绝对超时，仍按相应审查记录处理。
+
+## 2026-10-03 全量复审后的整改与验收
+
+本节对应2026-10-02全项目审查后用户授权的修复；下方旧日期记录保留作为历史证据，不应把旧缺陷或旧测试数量当成当前结果。6个实现子agent分工，API↔OCR、Web流程↔页面互审，主审独立核查转换器、小程序、迁移，并执行真实集成与浏览器验收。未创建commit或push，保留用户既有CONTEXT.md改动。
+
+### 本轮修复
+
+- **API/资源边界**：004兼容SQL NULL和JSON null，并隔离非数组来源；multipart解析前累计21MiB请求体上限，单文件20MiB分块读，超长文件名在落盘前拒绝。已知写入失败清理文件，不确定commit保留可能已发布文件。密码上限为72 UTF-8字节，旧bcrypt和HS256 token保持兼容；python-jose替换为PyJWT。
+- **转换器**：PDF栅格预算单页2500万、累计2亿像素，PNG输出最多50页/256MiB；PNG/JPEG/WebP共用受限图片解码；Office每次独立LibreOffice profile；PDF→Word保留矢量内容为栅格图，不保证原版式或可编辑矢量；水印布局收敛到页面内并适配旋转。
+- **收费OCR**：005记录提交意图和供应商jobId。已知job恢复轮询/下载/构建而不再submit；提交未知时failed/ERR_OCR_UNCERTAIN，保留应用配额待人工核对，禁止自动重提/取消退款。三种格式均核对源页数/结果总数/顺序；DOCX缺图或图片处理失败不再静默成功。无显式page_index时只能依赖供应商顺序契约，不能证明其内容没有换页。
+- **Web**：历史12类型预览下载，依/pages.ext分流TXT/PDF/DOCX/图片；下载及加载错误可见；fetch含body 30秒、XHR 120秒超时；仅明确401清凭据；8页取消/真实进度接通；轮询、迟到响应及Blob资源清理。5个PDF工具7语补齐，422字段错误可读，匿名OCR在上传前去登录，持久语言SSR hydration一致。
+- **小程序**：upload/request/download统一401清理；history按total/page加载更多；图片按选中页懒下载；上传前校验参数边界，数值为JSON number。仅支持weapp，移除未验证H5入口。
+- **交叉review新增修复**：005回退遗漏job-id-only记录、API取消对不一致OCR恢复事实保护、图片选择超20张的Blob泄漏、PDF.js跨域CDN worker wrapper泄漏。PDF worker改为同源构建产物，两次预览关闭后活Blob均为0。
+
+### 实际执行证据
+
+|范围|结果|证据边界|
+|---|---|---|
+|API/迁移/生命周期|47/47通过|新安装依赖，真实隔离PostgreSQL16；含004 JSON null、005恢复记录/回退保护、锁丢失、退款、上传及认证|
+|Worker|23/23通过|当前完整unittest套件；另有11类非OCR真实转换smoke，Office实际并发输出内容核对|
+|Web|38/38通过，生产构建16/16页面成功|Node20.20.2/Next15.5.25；PDF同源worker修复后再次生产构建与浏览器复验|
+|小程序|8/8通过、tsc通过、weapp构建成功|隔离干净npm ci安装；实际TS/TSX控制流配Taro/React环境桩，另有真实本地HTTP客户端smoke；不等同微信真机|
+|真实应用链路|通过|HTTP注册/鉴权→上传→PostgreSQL→dispatcher→Redis→Celery→WebP/PDF旋转结果下载；巨大PDF安全失败、waiting取消、越权拒绝、长密码/文件名拒绝和删除|
+|OCR恢复smoke|通过|真实本地供应商HTTP fixture+PG+Worker；poll/image重试POST始终1次，断连接未知提交不退配额；三格式实际读取产物；未调用收费云OCR|
+|真实浏览器|通过所列场景|注册422可读、匿名OCR零上传跳转、PDF/DOCX/双页图片预览、历史操作、waiting取消200回idle、移动端历史、持久英文工具页与hydration；PDF同源worker200，反复关闭无Blob残留|
+|浏览器故障/状态注入|通过|受控TXT输出、503保token恢复、下载404提示、processing 42%条与2/5细节；不冒称供应商或长任务实测|
+
+主审集成测试使用一次性数据库及隔离源/产物目录，未触碰业务数据库或外部付费服务。验收后已关闭浏览器、Web/API/dispatcher/Worker/Redis及隔离PostgreSQL，清理主审临时服务数据、夹具和脚本；保留隔离依赖安装及依赖审计证据供复核。HTTP实际下载字节及产物内容已核对；浏览器下载事件捕获工具超时，未将自动化保存落盘列为已证明。测试保留Pydantic/Starlette弃用及passlib的bcrypt版本探测警告，未通过抑制日志绕过问题。
+
+### 依赖与剩余限制
+
+- API/Worker联合requirements的pip-audit：整改前按公告alias去重36项，升级FastAPI0.142.2、Starlette1.7.0、multipart0.0.32、PyJWT2.15.1、Pillow12.3.0、dotenv1.2.4后无已知漏洞，pip check通过。Web生产npm audit为0。
+- 小程序生产npm audit从13项降至4项critical，均为Swiper根告警及传播；esbuild0.25.12、lodash-es4.18.1已锁定修复。全依赖树另有55项，口径不同。Swiper6.8.0的GHSA-hmx5-qpq5-p643需升级到不兼容旧Taro H5接口的12.1.2+；没有强行覆写破坏H5依赖。实际weapp模块图104模块无Swiper/esbuild/lodash-es，不宣称依赖树清零，也不提供H5支持。
+- 仓库miniprogram/node_modules安装曾遇WSL EACCES；可靠构建来自隔离干净安装，不能据此声称原地node_modules已修好。
+- 真实微信登录/原生API/开发者工具视觉验收、真实PaddleOCR-VL质量与计费、Docker及CloudBase/CFS部署仍未验证。微信IDE端口不可用，未擅改安全配置。
+- 历史规划中的文件过期/孤儿清理、认证限流、Web历史删除后的分页边界及完整可访问性仍不在本轮已验证范围；旧游客每日3次宣传与ADR0003不一致的文案未扩大修改。
+- **上线前必须协调迁移005与API/Worker**：先停旧Worker/processor，备份并迁移，再启动同版本服务；旧活动OCR会被隔离，需人工核对；任一OCR状态或jobId存在即禁止丢证据downgrade。见DEPLOYMENT.md和ADR0004。
+
+---
+
 - 审查日期：2026-09-12
 - 范围：当前工作区（包含审查前已有未提交修改），前端 38 个 TS/TSX 文件、后端/Worker/迁移/seed 共 42 个 Python 文件，以及 Docker、依赖与主要架构/部署文档。
 - 方法：测试优先、API/Worker/前端并行只读审查，主审集成配置核查和隔离复现；覆盖正确性、可读性、架构、安全、性能。

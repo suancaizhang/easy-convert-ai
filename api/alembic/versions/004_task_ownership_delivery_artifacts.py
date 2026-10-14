@@ -19,7 +19,15 @@ def upgrade() -> None:
         WITH sources AS (
             SELECT id AS task_id, document_id::text AS source_id FROM tasks
             UNION
-            SELECT id, jsonb_array_elements_text(COALESCE(source_document_ids, '[]'::jsonb)) FROM tasks
+            SELECT id, jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(source_document_ids) = 'array'
+                     THEN source_document_ids ELSE '[]'::jsonb END
+            ) FROM tasks
+            UNION
+            -- SQL/JSON null are ordinary single-source tasks. Other nonarrays
+            -- have unknown provenance: a missing source quarantines the task.
+            SELECT id, NULL::text FROM tasks
+            WHERE jsonb_typeof(source_document_ids) NOT IN ('array', 'null')
         ), ownership AS (
             SELECT sources.task_id, count(*) AS referenced, count(documents.id) AS found,
                    count(DISTINCT documents.user_id) AS owners,

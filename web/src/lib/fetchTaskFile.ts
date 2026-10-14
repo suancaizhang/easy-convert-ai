@@ -1,48 +1,41 @@
-/**
- * 通用任务文件请求工具
- * 从 useToolPage.ts 的 fetchResult 逻辑中提取，供预览组件复用
- */
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8111";
-
-function getAuthHeaders(): Record<string, string> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-}
+import { request } from "./api";
 
 interface FetchTaskFileOptions {
-  /** 额外路径后缀，如 "/pages" 或 "/download/0" */
   path?: string;
-  /** 是否为预览模式（添加 ?preview=1） */
   preview?: boolean;
-  /** 是否解析为 JSON（否则返回 Blob） */
   json?: boolean;
+  signal?: AbortSignal;
 }
 
-/**
- * 请求任务相关文件
- * @returns json=true 时返回解析后的对象；否则返回 Blob
- */
 export async function fetchTaskFile(
   taskId: string,
-  options: FetchTaskFileOptions = {}
+  { path = "/download", preview = false, json = false, signal }: FetchTaskFileOptions = {},
 ): Promise<Blob | Record<string, unknown>> {
-  const { path = "/download", preview = false, json = false } = options;
-
-  const base = `${API_URL}/api/tasks/${taskId}${path}`;
+  const base = `/api/tasks/${taskId}${path}`;
   const url = preview ? `${base}${base.includes("?") ? "&" : "?"}preview=1` : base;
+  return request<Blob | Record<string, unknown>>(url, { signal }, (res) => json ? res.json() : res.blob());
+}
 
-  const res = await fetch(url, { headers: getAuthHeaders() });
-
-  if (!res.ok) {
-    throw new Error(`Request failed: ${res.status}`);
+export async function downloadTaskFile(taskId: string, signal?: AbortSignal): Promise<void> {
+  const { blob, disposition } = await request(`/api/tasks/${taskId}/download`, { signal }, async (res) => ({
+    blob: await res.blob(), disposition: res.headers.get("content-disposition"),
+  }));
+  if (signal?.aborted) return;
+  let filename = "converted_file";
+  const match = disposition?.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
+  if (match) {
+    try { filename = decodeURIComponent(match[1]); } catch { filename = match[1]; }
   }
-
-  if (json) {
-    return (await res.json()) as Record<string, unknown>;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    // Give the browser a turn to acquire the download before releasing its URL.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
-
-  return await res.blob();
 }

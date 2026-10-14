@@ -13,3 +13,10 @@ export function setToken(token: string): void {
 export function clearToken(): void {
   Taro.removeStorageSync(TOKEN_KEY)
 }
+
+/** All authenticated transports share the same expired-session behavior. */
+export function handleUnauthorized(statusCode: number): void {
+  if (statusCode !== 401) return
+  clearToken()
+  void Taro.reLaunch({ url: '/pages/login/index' })
+}

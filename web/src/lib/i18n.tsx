@@ -78,7 +78,13 @@ const I18nContext = createContext<I18nContextType>({
 });
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(readStoredLocale);
+  // The server and first client render must agree; restore browser-only state
+  // after hydration without overwriting the saved selection.
+  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
+
+  useEffect(() => {
+    setLocaleState(readStoredLocale());
+  }, []);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);

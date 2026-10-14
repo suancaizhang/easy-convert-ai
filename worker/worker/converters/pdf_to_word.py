@@ -1,12 +1,63 @@
+import io
+import math
 import os
 import uuid
 
-import fitz  # PyMuPDF
+import fitz
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
+from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from worker.converters import ConvertResult, DocumentConverter, OutputFormat, ProgressCallback
+from worker.converters.resource_limits import PixelBudget
+
+
+def _vector_block(pdf, page_num, budget):
+    page = pdf[page_num]
+    bounds = fitz.Rect()
+    for kind, bbox in page.get_bboxlog():
+        if kind in ("fill-path", "stroke-path", "fill-shade"):
+            bounds |= fitz.Rect(bbox)
+    bounds &= page.rect * page.derotation_matrix
+    if bounds.is_empty:
+        return None
+    # Isolate the graphical layer, not an entire-page screenshot containing
+    # another copy of all the editable text and extracted embedded images.
+    with fitz.open() as graphics:
+        graphics.insert_pdf(pdf, from_page=page_num, to_page=page_num)
+        layer = graphics[0]
+        layer.set_rotation(0)
+        layer.add_redact_annot(layer.rect, fill=False)
+        layer.apply_redactions(images=1, graphics=0)
+        raster = bounds * fitz.Matrix(150 / 72, 150 / 72)
+        budget.add(math.ceil(raster.x1) - math.floor(raster.x0), math.ceil(raster.y1) - math.floor(raster.y0))
+        pix = layer.get_pixmap(matrix=fitz.Matrix(150 / 72, 150 / 72), clip=bounds, alpha=False)
+        if pix.is_unicolor and pix.pixel(0, 0) == (255, 255, 255):
+            return None  # A white-only PDF background is already the Word page.
+        return {"type": 1, "bbox": tuple(bounds), "image": pix.tobytes("png")}
+
+
+def _add_text_block(doc, block, page_width):
+    for line in block.get("lines", []):
+        paragraph = doc.add_paragraph()
+        x0, _, x1, _ = line["bbox"]
+        if abs((x0 + x1) / 2 - page_width / 2) < 20 and x0 > page_width * 0.25:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        elif x0 > page_width * 0.6:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        for span in line.get("spans", []):
+            if not span.get("text"):
+                continue
+            run = paragraph.add_run(span["text"])
+            run.font.size = Pt(span.get("size", 11))
+            flags = span.get("flags", 0)
+            run.bold = bool(flags & 16)
+            run.italic = bool(flags & 2)
+            color = span.get("color", 0)
+            run.font.color.rgb = RGBColor((color >> 16) & 255, (color >> 8) & 255, color & 255)
+            font_name = span.get("font", "")
+            if font_name:
+                run.font.name = font_name.split("+", 1)[-1]
 
 
 class PdfToWordConverter(DocumentConverter):
@@ -25,119 +76,36 @@ class PdfToWordConverter(DocumentConverter):
         params: dict | None = None,
         progress_callback: ProgressCallback = None,
     ) -> ConvertResult:
-        pdf = fitz.open(input_path)
         doc = Document()
-        total = len(pdf)
+        budget = PixelBudget()
+        with fitz.open(input_path) as pdf:
+            total = len(pdf)
+            for page_num, page in enumerate(pdf):
+                blocks = page.get_text(
+                    "dict", flags=fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_PRESERVE_IMAGES
+                ).get("blocks", [])
+                vector = _vector_block(pdf, page_num, budget)
+                if vector:
+                    blocks.append(vector)
+                for block in sorted(blocks, key=lambda block: (block["bbox"][1], block["bbox"][0])):
+                    if block.get("type") == 1 and block.get("image"):
+                        paragraph = doc.add_paragraph()
+                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        width = min(fitz.Rect(block["bbox"]).width, 6 * 72)
+                        with io.BytesIO(block["image"]) as image:
+                            paragraph.add_run().add_picture(image, width=Pt(width))
+                    elif block.get("type") == 0:
+                        _add_text_block(doc, block, page.rect.width)
+                if page_num < total - 1:
+                    doc.add_page_break()
+                if progress_callback:
+                    progress_callback(page_num + 1, total)
 
-        for page_num in range(total):
-            page = pdf[page_num]
-            page_width = page.rect.width
-
-            # Extract text with formatting using "dict" mode
-            page_dict = page.get_text(
-                "dict", flags=fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_PRESERVE_IMAGES
-            )
-
-            for block in page_dict.get("blocks", []):
-                # Image block
-                if block.get("type") == 1:
-                    try:
-                        img_data = block.get("image")
-                        if img_data:
-                            img_path = os.path.join(
-                                output_dir, f"_img_{uuid.uuid4().hex[:8]}.png"
-                            )
-                            with open(img_path, "wb") as f:
-                                f.write(img_data)
-                            p = doc.add_paragraph()
-                            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                            # Scale image to fit page width (max 6 inches)
-                            img_width = block.get("width", 300)
-                            doc_width = min(img_width * 72 / 96, 6 * 72)  # points
-                            p.add_run().add_picture(img_path, width=Inches(doc_width / 72))
-                    except Exception:
-                        pass
-                    continue
-
-                # Text block (type == 0)
-                if block.get("type") != 0:
-                    continue
-
-                for line in block.get("lines", []):
-                    p = doc.add_paragraph()
-
-                    # Detect alignment from line position
-                    line_x0 = line["bbox"][0]
-                    line_x1 = line["bbox"][2]
-                    line_center = (line_x0 + line_x1) / 2
-                    page_center = page_width / 2
-
-                    if abs(line_center - page_center) < 20 and (line_x0 > page_width * 0.25):
-                        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    elif line_x0 > page_width * 0.6:
-                        p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-
-                    for span in line.get("spans", []):
-                        text = span.get("text", "")
-                        if not text:
-                            continue
-
-                        run = p.add_run(text)
-
-                        # Font size
-                        font_size = span.get("size", 11)
-                        run.font.size = Pt(font_size)
-
-                        # Bold detection (flags bit 4 = 16)
-                        flags = span.get("flags", 0)
-                        if flags & 16:
-                            run.bold = True
-
-                        # Italic detection (flags bit 1 = 2)
-                        if flags & 2:
-                            run.italic = True
-
-                        # Font color
-                        color_int = span.get("color", 0)
-                        if color_int and color_int != 0:
-                            r = (color_int >> 16) & 0xFF
-                            g = (color_int >> 8) & 0xFF
-                            b = color_int & 0xFF
-                            if not (r == 0 and g == 0 and b == 0):
-                                run.font.color.rgb = RGBColor(r, g, b)
-
-                        # Font name
-                        font_name = span.get("font", "")
-                        if font_name:
-                            # Clean up font name (remove subset prefix like ABCDEF+)
-                            if "+" in font_name:
-                                font_name = font_name.split("+", 1)[1]
-                            run.font.name = font_name
-
-            if page_num < len(pdf) - 1:
-                doc.add_page_break()
-
-            if progress_callback:
-                progress_callback(page_num + 1, total)
-
-        output_name = f"{uuid.uuid4()}.docx"
-        output_path = os.path.join(output_dir, output_name)
+        output_path = os.path.join(output_dir, f"{uuid.uuid4()}.docx")
         doc.save(output_path)
-        page_count = len(pdf)
-        pdf.close()
-
-        # Clean up temporary image files
-        for f in os.listdir(output_dir):
-            if f.startswith("_img_"):
-                try:
-                    os.remove(os.path.join(output_dir, f))
-                except OSError:
-                    pass
-
-        file_size = os.path.getsize(output_path)
         return ConvertResult(
             output_path=output_path,
-            file_size=file_size,
-            page_count=page_count,
+            file_size=os.path.getsize(output_path),
+            page_count=total,
             metadata={"engine": "pymupdf"},
         )

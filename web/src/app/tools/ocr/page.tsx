@@ -34,7 +34,7 @@ export default function OcrPage() {
 }
 
 function OcrPageInner() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
 
@@ -79,15 +79,14 @@ function OcrPageInner() {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
     if (f) handleFileSelect(f);
-  }, []);
+  }, [t]);
 
   const handleSubmit = async () => {
-    // TODO: 测试期间放开登录限制，上线前恢复
-    // if (!user) {
-    //   router.push("/login");
-    //   return;
-    // }
-    if (!file) return;
+    if (!file || loading) return;
+    if (!user) {
+      router.push("/login");
+      return;
+    }
     setLocalError("");
     await tool.uploadAndRun([file]);
   };
@@ -99,15 +98,14 @@ function OcrPageInner() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const loginPrompt = null; // TODO: 测试期间隐藏登录提示，上线前恢复
-  // const loginPrompt = !user ? (
-  //   <p className="text-center text-sm text-amber-600 bg-amber-50 rounded-md px-3 py-2">
-  //     {t("ocr.loginRequired")}
-  //     <a href="/login" className="font-medium underline hover:text-amber-800">
-  //       {t("ocr.loginLink")}
-  //     </a>
-  //   </p>
-  // ) : null;
+  const loginPrompt = !loading && !user ? (
+    <p className="text-center text-sm text-amber-600 bg-amber-50 rounded-md px-3 py-2">
+      {t("ocr.loginRequired")}
+      <a href="/login" className="font-medium underline hover:text-amber-800">
+        {t("ocr.loginLink")}
+      </a>
+    </p>
+  ) : null;
 
   return (
     <ToolPageLayout
@@ -115,6 +113,10 @@ function OcrPageInner() {
       subtitle={t("ocr.subtitle")}
       stage={tool.stage}
       uploadProgress={tool.uploadProgress}
+      conversionProgress={tool.conversionProgress}
+      progressDetail={tool.progressDetail}
+      canCancel={tool.canCancel}
+      onCancel={tool.cancel}
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
@@ -131,7 +133,6 @@ function OcrPageInner() {
       doneLabel={t("ocr.done")}
       backLabel={t("nav.backHome")}
       uploadingLabel={t("ocr.uploading", { progress: tool.uploadProgress })}
-      statusLabel={t("ocr.status", { status: tool.taskStatus })}
       retryLabel={t("ocr.retry")}
       continueLabel={t("ocr.continue")}
       onDownload={tool.download}
@@ -207,7 +208,7 @@ function OcrPageInner() {
 
       <button
         onClick={handleSubmit}
-        disabled={!file}
+        disabled={!file || loading}
         className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {t("ocr.startConvert")}

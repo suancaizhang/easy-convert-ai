@@ -17,28 +17,34 @@ export function ImagePreview({ taskId }: ImagePreviewProps) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const urls: string[] = [];
+    setImageUrls([]);
+    setLoading(true);
+    setError(false);
 
     async function loadImages() {
       try {
         // 获取总页数
-        const pagesRes = await fetchTaskFile(taskId, { path: "/pages", json: true }) as Record<string, unknown>;
+        const pagesRes = await fetchTaskFile(taskId, { path: "/pages", json: true, signal }) as Record<string, unknown>;
         const total = pagesRes.total as number;
 
         // 逐页获取图片 Blob URL
-        const urls: string[] = [];
         for (let i = 0; i < total; i++) {
-          if (cancelled) return;
-          const blob = await fetchTaskFile(taskId, { path: `/download/${i}`, preview: true });
+          if (signal.aborted) return;
+          const blob = await fetchTaskFile(taskId, { path: `/download/${i}`, preview: true, signal });
+          if (signal.aborted) return;
           urls.push(URL.createObjectURL(blob as Blob));
         }
 
-        if (!cancelled) {
+        if (!signal.aborted) {
           setImageUrls(urls);
           setLoading(false);
         }
       } catch {
-        if (!cancelled) {
+        urls.splice(0).forEach((url) => URL.revokeObjectURL(url));
+        if (!signal.aborted) {
           setError(true);
           setLoading(false);
         }
@@ -48,11 +54,9 @@ export function ImagePreview({ taskId }: ImagePreviewProps) {
     loadImages();
 
     return () => {
-      cancelled = true;
-      // 释放 Blob URL
-      imageUrls.forEach((url) => URL.revokeObjectURL(url));
+      controller.abort();
+      urls.splice(0).forEach((url) => URL.revokeObjectURL(url));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
   if (loading) {

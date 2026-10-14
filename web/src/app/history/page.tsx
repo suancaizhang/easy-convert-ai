@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
+import { downloadTaskFile } from "@/lib/fetchTaskFile";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { FilePreview } from "@/components/preview";
@@ -30,24 +31,11 @@ const TASK_TYPE_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
   pdf_to_image: "taskType.pdfToImage",
   images_to_pdf: "taskType.imagesToPdf",
   ocr_to_word: "taskType.ocrToWord",
-};
-
-const PREVIEWABLE_TYPES: Record<string, boolean> = {
-  pdf_to_word: true,
-  pdf_to_image: true,
-  word_to_pdf: true,
-  excel_to_pdf: true,
-  ppt_to_pdf: true,
-  images_to_pdf: true,
-  ocr_to_word: true,
-};
-
-const PREVIEW_LABEL_KEYS: Record<string, keyof TranslationKeys> = {
-  pdf_to_image: "history.previewImage",
-  word_to_pdf: "history.previewPdf",
-  excel_to_pdf: "history.previewPdf",
-  ppt_to_pdf: "history.previewPdf",
-  images_to_pdf: "history.previewPdf",
+  pdf_merge: "taskType.pdfMerge",
+  pdf_split: "taskType.pdfSplit",
+  pdf_compress: "taskType.pdfCompress",
+  pdf_rotate: "taskType.pdfRotate",
+  pdf_watermark: "taskType.pdfWatermark",
 };
 
 const STATUS_LABEL_KEYS: Record<string, { key: keyof TranslationKeys; className: string }> = {
@@ -65,6 +53,23 @@ export default function HistoryPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [fetching, setFetching] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [downloadError, setDownloadError] = useState("");
+  const downloadRef = useRef<AbortController | null>(null);
+  useEffect(() => () => downloadRef.current?.abort(), []);
+
+  const handleDownload = async (id: string) => {
+    downloadRef.current?.abort();
+    const controller = new AbortController();
+    downloadRef.current = controller;
+    setDownloadError("");
+    try {
+      await downloadTaskFile(id, controller.signal);
+    } catch {
+      if (!controller.signal.aborted) setDownloadError(t("history.downloadFailed"));
+    }
+  };
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
   const [previewTaskType, setPreviewTaskType] = useState<string | null>(null);
 
@@ -102,17 +107,23 @@ export default function HistoryPage() {
 
   useEffect(() => {
     if (!user) return;
+    const controller = new AbortController();
     setFetching(true);
+    setLoadFailed(false);
     api
       .get<{ items: HistoryItem[]; total: number }>(
-        `/api/documents/history?page=${page}&page_size=20`
+        `/api/documents/history?page=${page}&page_size=20`,
+        { signal: controller.signal }
       )
       .then((res) => {
+        if (controller.signal.aborted) return;
         setItems(res.items);
         setTotal(res.total);
       })
-      .finally(() => setFetching(false));
-  }, [user, page]);
+      .catch(() => { if (!controller.signal.aborted) setLoadFailed(true); })
+      .finally(() => { if (!controller.signal.aborted) setFetching(false); });
+    return () => controller.abort();
+  }, [user, page, reload]);
 
   if (loading || !user) return null;
 
@@ -129,7 +140,15 @@ export default function HistoryPage() {
         <p className="text-muted text-center py-12">{t("history.loading")}</p>
       )}
 
-      {!fetching && items.length === 0 && (
+      {loadFailed && (
+        <div role="alert" className="bg-error-bg text-error-fg text-center p-4 rounded-md mb-4">
+          <p>{t("history.loadFailed")}</p>
+          <button onClick={() => setReload((value) => value + 1)} className="underline mt-2">{t("history.retry")}</button>
+        </div>
+      )}
+      {downloadError && <p role="alert" className="text-error-fg mb-4">{downloadError}</p>}
+
+      {!fetching && !loadFailed && items.length === 0 && (
         <div className="text-center py-12">
           <p className="text-muted mb-4">{t("history.empty")}</p>
           <Link
@@ -177,13 +196,13 @@ export default function HistoryPage() {
                       </span>
                     )}
                     {item.task_type &&
-                      PREVIEWABLE_TYPES[item.task_type] &&
                       item.task_id &&
                       item.task_status === "success" && (
                         <button
                           onClick={() => handlePreview(item.task_id!, item.task_type!)}
                           className="text-brand hover:text-brand-hover p-1 rounded hover:bg-brand-surface transition-colors"
-                          title={PREVIEW_LABEL_KEYS[item.task_type] ? t(PREVIEW_LABEL_KEYS[item.task_type]) : t("history.preview")}
+                          title={t("history.preview")}
+                          aria-label={t("history.preview")}
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -191,6 +210,13 @@ export default function HistoryPage() {
                           </svg>
                         </button>
                       )}
+                    {item.task_id && item.task_status === "success" && (
+                      <button onClick={() => handleDownload(item.task_id!)}
+                        className="text-brand hover:text-brand-hover p-1 text-sm"
+                        aria-label={t("history.download")}>
+                        {t("history.download")}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDelete(item.id)}
                       className="text-muted hover:text-error-fg p-1 rounded hover:bg-error-bg transition-colors"

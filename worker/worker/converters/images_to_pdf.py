@@ -4,6 +4,8 @@ import uuid
 import fitz  # PyMuPDF
 
 from worker.converters import ConvertResult, DocumentConverter, OutputFormat, ProgressCallback
+from worker.converters.image_pdf import append_image
+from worker.converters.resource_limits import PixelBudget
 
 
 class ImagesToPdfConverter(DocumentConverter):
@@ -29,21 +31,15 @@ class ImagesToPdfConverter(DocumentConverter):
             image_paths = [input_path]
 
         total = len(image_paths)
-        pdf = fitz.open()
-        for i, img_path in enumerate(image_paths):
-            img = fitz.open(img_path)
-            rect = img[0].rect
-            pdf_page = pdf.new_page(width=rect.width, height=rect.height)
-            pdf_page.insert_image(rect, filename=img_path)
-            img.close()
-            if progress_callback:
-                progress_callback(i + 1, total)
-
-        output_name = f"{uuid.uuid4()}.pdf"
-        output_path = os.path.join(output_dir, output_name)
-        pdf.save(output_path)
-        page_count = len(pdf)
-        pdf.close()
+        budget = PixelBudget()
+        output_path = os.path.join(output_dir, f"{uuid.uuid4()}.pdf")
+        with fitz.open() as pdf:
+            for i, img_path in enumerate(image_paths):
+                append_image(pdf, img_path, budget)
+                if progress_callback:
+                    progress_callback(i + 1, total)
+            pdf.save(output_path)
+            page_count = len(pdf)
 
         file_size = os.path.getsize(output_path)
         return ConvertResult(

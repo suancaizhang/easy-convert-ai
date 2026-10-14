@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import {
   DndContext,
   closestCenter,
@@ -99,6 +99,19 @@ export default function ImagesToPdfPage() {
   const [items, setItems] = useState<ImageItem[]>([]);
   const [localError, setLocalError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewUrls = useRef(new Set<string>());
+
+  const releasePreview = useCallback((url: string) => {
+    if (previewUrls.current.delete(url)) URL.revokeObjectURL(url);
+  }, []);
+
+  useEffect(() => {
+    const urls = previewUrls.current;
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      urls.clear();
+    };
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -130,10 +143,12 @@ export default function ImagesToPdfPage() {
         setLocalError(t("imagesToPdf.fileTooLarge").replace("{name}", f.name));
         continue;
       }
+      const preview = URL.createObjectURL(f);
+      previewUrls.current.add(preview);
       valid.push({
         id: `${f.name}-${f.size}-${Date.now()}-${Math.random()}`,
         file: f,
-        preview: URL.createObjectURL(f),
+        preview,
       });
     }
 
@@ -141,11 +156,12 @@ export default function ImagesToPdfPage() {
       const combined = [...prev, ...valid];
       if (combined.length > MAX_FILES) {
         setLocalError(t("imagesToPdf.maxExceeded").replace("{max}", String(MAX_FILES)));
+        combined.slice(MAX_FILES).forEach((item) => releasePreview(item.preview));
         return combined.slice(0, MAX_FILES);
       }
       return combined;
     });
-  }, [t]);
+  }, [t, releasePreview]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -158,11 +174,11 @@ export default function ImagesToPdfPage() {
   const handleRemove = useCallback((id: string) => {
     setItems((prev) => {
       const item = prev.find((i) => i.id === id);
-      if (item) URL.revokeObjectURL(item.preview);
+      if (item) releasePreview(item.preview);
       return prev.filter((i) => i.id !== id);
     });
     setLocalError("");
-  }, []);
+  }, [releasePreview]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
@@ -186,7 +202,7 @@ export default function ImagesToPdfPage() {
 
   const handleReset = () => {
     tool.reset();
-    items.forEach((i) => URL.revokeObjectURL(i.preview));
+    items.forEach((i) => releasePreview(i.preview));
     setItems([]);
     setLocalError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -200,6 +216,10 @@ export default function ImagesToPdfPage() {
       subtitle={t("imagesToPdf.subtitle")}
       stage={tool.stage}
       uploadProgress={tool.uploadProgress}
+      conversionProgress={tool.conversionProgress}
+      progressDetail={tool.progressDetail}
+      canCancel={tool.canCancel}
+      onCancel={tool.cancel}
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}

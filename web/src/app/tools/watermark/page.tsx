@@ -2,19 +2,21 @@
 
 import { useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { useToolPage } from "@/lib/useToolPage";
 import { ToolPageLayout } from "@/components/ToolPageLayout";
 
 const MAX_SIZE = 20 * 1024 * 1024;
 const POSITION_OPTIONS = [
-  { value: "center", label: "居中" },
-  { value: "top-left", label: "左上" },
-  { value: "top-right", label: "右上" },
-  { value: "bottom-left", label: "左下" },
-  { value: "bottom-right", label: "右下" },
-];
+  { value: "center", label: "pdf.watermark.center" },
+  { value: "top-left", label: "pdf.watermark.topLeft" },
+  { value: "top-right", label: "pdf.watermark.topRight" },
+  { value: "bottom-left", label: "pdf.watermark.bottomLeft" },
+  { value: "bottom-right", label: "pdf.watermark.bottomRight" },
+] as const;
 
 export default function WatermarkPage() {
+  const { t } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState("");
   const [opacity, setOpacity] = useState(0.3);
@@ -35,11 +37,11 @@ export default function WatermarkPage() {
 
   const handleFileSelect = (f: File) => {
     if (!f.name.toLowerCase().endsWith(".pdf")) {
-      setLocalError("仅支持 PDF 格式");
+      setLocalError(t("pdf.onlyPdf"));
       return;
     }
     if (f.size > MAX_SIZE) {
-      setLocalError("文件超过 20MB 限制");
+      setLocalError(t("convert.fileTooLarge"));
       return;
     }
     setFile(f);
@@ -50,12 +52,12 @@ export default function WatermarkPage() {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
     if (f) handleFileSelect(f);
-  }, []);
+  }, [t]);
 
   const handleStart = async () => {
     if (!file) return;
     if (!text.trim()) {
-      setLocalError("请输入水印文字");
+      setLocalError(t("pdf.watermark.textRequired"));
       return;
     }
     setLocalError("");
@@ -74,20 +76,24 @@ export default function WatermarkPage() {
 
   return (
     <ToolPageLayout
-      title="PDF 水印"
-      subtitle="为 PDF 添加文字水印"
+      title={t("taskType.pdfWatermark")}
+      subtitle={t("pdf.watermark.subtitle")}
       stage={tool.stage}
       uploadProgress={tool.uploadProgress}
+      conversionProgress={tool.conversionProgress}
+      progressDetail={tool.progressDetail}
+      canCancel={tool.canCancel}
+      onCancel={tool.cancel}
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
       taskType="pdf_watermark"
       canPreview
       showPreview={tool.showPreview}
-      previewLabel="预览 PDF"
-      downloadLabel="下载 PDF"
-      convertingLabel="添加水印中..."
-      doneLabel="水印添加完成！"
+      previewLabel={t("convert.previewPdf")}
+      downloadLabel={t("imagesToPdf.downloadPdf")}
+      convertingLabel={t("pdf.watermark.busy")}
+      doneLabel={t("pdf.watermark.done")}
       onDownload={tool.download}
       onPreview={tool.preview}
       onClosePreview={tool.closePreview}
@@ -116,8 +122,8 @@ export default function WatermarkPage() {
           </div>
         ) : (
           <div>
-            <p className="text-tertiary">点击或拖拽 PDF 到此处</p>
-            <p className="text-xs text-muted mt-2">最大 20MB</p>
+            <p className="text-tertiary">{t("pdf.dropzone")}</p>
+            <p className="text-xs text-muted mt-2">{t("pdf.maxSize")}</p>
           </div>
         )}
       </div>
@@ -125,18 +131,18 @@ export default function WatermarkPage() {
       {file && (
         <>
           <div>
-            <label className="block text-sm font-medium mb-2">水印文字</label>
+            <label className="block text-sm font-medium mb-2">{t("pdf.watermark.text")}</label>
             <input
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="输入水印内容"
+              placeholder={t("pdf.watermark.placeholder")}
               className="w-full border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">透明度：{Math.round(opacity * 100)}%</label>
+            <label className="block text-sm font-medium mb-2">{t("pdf.watermark.opacity", { value: Math.round(opacity * 100) })}</label>
             <input
               type="range"
               min="5"
@@ -148,7 +154,7 @@ export default function WatermarkPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">位置</label>
+            <label className="block text-sm font-medium mb-2">{t("pdf.watermark.position")}</label>
             <div className="grid grid-cols-3 gap-2">
               {POSITION_OPTIONS.map((opt) => (
                 <button
@@ -160,7 +166,7 @@ export default function WatermarkPage() {
                       : "border-border hover:border-brand-light"
                   }`}
                 >
-                  {opt.label}
+                  {t(opt.label)}
                 </button>
               ))}
             </div>
@@ -173,7 +179,7 @@ export default function WatermarkPage() {
         disabled={!file || !text.trim()}
         className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        添加水印
+        {t("pdf.watermark.start")}
       </button>
     </ToolPageLayout>
   );

@@ -58,10 +58,8 @@ export default function Result() {
   }
 
   const renderImages = async (pageIndex?: number) => {
-    const urls: string[] = []
-    const total = pages?.total || 1
-    for (let i = 0; i < total; i++) urls.push(await downloadTaskFile(taskId, i))
-    await previewImages(urls, pageIndex)
+    const tmp = await downloadTaskFile(taskId, pageIndex ?? 0)
+    await previewImages([tmp], 0)
   }
 
   const renderDocument = async (pageIndex?: number) => {
@@ -112,7 +110,7 @@ export default function Result() {
       {pages && (
         <View className='card actions'>
           <Button className='btn-primary btn-block' loading={busy} onClick={() => openOutput()}>
-            {IMAGE_EXTS.includes(pages.ext) ? '预览结果图片' : '打开结果文档'}
+            {IMAGE_EXTS.includes(pages.ext) ? (pages.total > 1 ? '预览第 1 张图片' : '预览结果图片') : '打开结果文档'}
           </Button>
           {pages.total > 0 && <Text className='pages-hint'>共 {pages.total} 个输出文件</Text>}
           {pages.total > 1 && (

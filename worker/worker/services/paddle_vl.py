@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+from typing import Protocol
 from dataclasses import dataclass, field
 
 import httpx
@@ -38,6 +39,31 @@ class OcrResult:
     total_pages: int = 0
 
 
+
+class OcrSubmissionRejected(ValueError):
+    """The provider explicitly rejected a submission without creating a job."""
+
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+        super().__init__(f"OCR provider rejected submission (HTTP {status_code})")
+
+
+REJECTED_SUBMISSION_STATUS_CODES = {400, 401, 403, 413, 415, 422}
+
+class OcrSubmissionUncertain(RuntimeError):
+    """A paid submission may exist; automatic resubmission/refund is unsafe."""
+
+
+class OcrJobStore(Protocol):
+    def begin_submission(self) -> str | None:
+        """Return an existing job ID, or durably claim a never-submitted job."""
+        ...
+
+    def record_job(self, job_id: str) -> None:
+        """Durably record the provider ID before any polling or download."""
+        ...
+
+
 class PaddleVLService:
     """PaddleOCR-VL-1.6 云服务客户端
 
@@ -55,41 +81,30 @@ class PaddleVLService:
         }
         self._headers = {"Authorization": f"bearer {self.token}"}
 
-    def ocr_file(self, file_path: str) -> OcrResult:
-        """提交本地文件进行 OCR，阻塞等待结果返回。
+    def ocr_file(self, file_path: str, *, job_store: OcrJobStore) -> OcrResult:
+        """Resume a durable job, or record intent before the single paid POST.
 
-        Args:
-            file_path: 本地文件路径（支持图片和 PDF）
-
-        Returns:
-            OcrResult 包含每页的 markdown 文本和图片
-
-        Raises:
-            ValueError: token 未配置或文件不存在
-            RuntimeError: API 调用失败或 job 执行失败
-            TimeoutError: 轮询超时
+        There is no provider idempotency guarantee. An unknown submission stays
+        blocked until an operator reconciles the provider's billing/job records.
+        Database errors must escape unchanged so the worker reacquires its lock.
         """
-        if not os.path.exists(file_path):
-            raise ValueError(f"File not found: {file_path}")
-
-        job_id = self._submit_file(file_path)
-        logger.info(f"PaddleVL job submitted: {job_id}")
-
-        jsonl_url = self._poll_until_done(job_id)
-        return self._fetch_result(jsonl_url)
-
-    def ocr_url(self, file_url: str) -> OcrResult:
-        """提交文件 URL 进行 OCR。
-
-        Args:
-            file_url: 可公开访问的文件 URL
-
-        Returns:
-            OcrResult
-        """
-        job_id = self._submit_url(file_url)
-        logger.info(f"PaddleVL job submitted (URL mode): {job_id}")
-
+        if job_store is None:
+            raise ValueError("Durable OCR job storage is required")
+        if not os.path.isfile(file_path):
+            raise ValueError("OCR source file does not exist")
+        job_id = job_store.begin_submission()
+        if job_id is None:
+            try:
+                job_id = self._submit_file(file_path)
+                if not isinstance(job_id, str) or not job_id.strip() or len(job_id) > 255:
+                    raise RuntimeError("Invalid OCR job ID")
+            except OcrSubmissionRejected:
+                raise
+            except Exception:
+                # A timeout or malformed success response may follow a paid submit.
+                # Do not forward provider payloads (they may contain credentials).
+                raise OcrSubmissionUncertain("OCR submission outcome requires reconciliation") from None
+            job_store.record_job(job_id)
         jsonl_url = self._poll_until_done(job_id)
         return self._fetch_result(jsonl_url)
 
@@ -109,27 +124,10 @@ class PaddleVLService:
                 timeout=60,
             )
 
+        if resp.status_code in REJECTED_SUBMISSION_STATUS_CODES:
+            raise OcrSubmissionRejected(resp.status_code)
         if resp.status_code != 200:
-            raise RuntimeError(
-                f"PaddleVL submit failed ({resp.status_code}): {resp.text}"
-            )
-
-        return resp.json()["data"]["jobId"]
-
-    def _submit_url(self, file_url: str) -> str:
-        """通过 URL 模式提交 OCR job"""
-        headers = {**self._headers, "Content-Type": "application/json"}
-        payload = {
-            "fileUrl": file_url,
-            "model": MODEL,
-            "optionalPayload": self.options,
-        }
-        resp = httpx.post(JOB_URL, json=payload, headers=headers, timeout=60)
-
-        if resp.status_code != 200:
-            raise RuntimeError(
-                f"PaddleVL submit failed ({resp.status_code}): {resp.text}"
-            )
+            raise RuntimeError(f"PaddleVL submit failed ({resp.status_code})")
 
         return resp.json()["data"]["jobId"]
 
@@ -157,7 +155,7 @@ class PaddleVLService:
 
             if resp.status_code != 200:
                 raise RuntimeError(
-                    f"PaddleVL poll failed ({resp.status_code}): {resp.text}"
+                    f"PaddleVL poll failed ({resp.status_code})"
                 )
 
             data = resp.json()["data"]
@@ -171,8 +169,7 @@ class PaddleVLService:
                 return data["resultUrl"]["jsonUrl"]
 
             if state == "failed":
-                error_msg = data.get("errorMsg", "Unknown error")
-                raise RuntimeError(f"PaddleVL job failed: {error_msg}")
+                raise RuntimeError("PaddleVL job failed")
 
             # pending / running
             if state == "running":
@@ -215,6 +212,17 @@ class PaddleVLService:
                         for key, url in images.items()
                     ):
                         raise ValueError("page images must map paths to URLs")
+                    # The service returns layouts in source order. When its
+                    # pruned result supplies zero-based page identities, never
+                    # renumber missing, repeated, or shuffled pages as success.
+                    pruned = layout.get("prunedResult", {})
+                    if not isinstance(pruned, dict):
+                        raise ValueError("invalid pruned page result")
+                    page_index = pruned.get("page_index")
+                    if page_index is not None and (
+                        type(page_index) is not int or page_index != len(pages)
+                    ):
+                        raise ValueError("page indices are not in source order")
                     pages.append(OcrPage(len(pages) + 1, text, images))
             except ValueError as exc:
                 raise RuntimeError(f"Invalid PaddleVL JSONL result at line {line_num}") from exc

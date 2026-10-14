@@ -1,5 +1,5 @@
 import Taro from '@tarojs/taro'
-import { clearToken } from './storage'
+import { handleUnauthorized } from './storage'
 
 export interface PickedFile {
   path: string
@@ -93,8 +93,7 @@ export function downloadFile(
           return
         }
         if (r.statusCode === 401) {
-          clearToken()
-          Taro.reLaunch({ url: '/pages/login/index' })
+          handleUnauthorized(r.statusCode)
           reject(new Error('登录已过期，请重新登录'))
           return
         }

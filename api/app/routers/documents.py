@@ -1,15 +1,18 @@
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_optional_user, require_owner
-from app.task_service import valid_result_path
+from app.task_service import has_unresolved_ocr_submission, valid_result_path
 from app.models import User, Document, Task
+from app.upload_limits import MAX_FILE_SIZE
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -23,7 +26,7 @@ ALLOWED_TYPES = {
     "image/webp": "webp",
 }
 
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+UPLOAD_CHUNK_SIZE = 1024 * 1024
 UPLOAD_DIR = "/tmp/uploads"
 GUEST_UPLOAD_DIR = "/tmp/guest"
 
@@ -40,7 +43,7 @@ class DocumentResponse(BaseModel):
 
 
 @router.post("/upload", response_model=DocumentResponse)
-async def upload_file(
+def upload_file(
     file: UploadFile = File(...),
     current_user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
@@ -48,13 +51,13 @@ async def upload_file(
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="不支持的文件格式")
 
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="文件大小超过 20MB 限制")
-
     file_ext = ALLOWED_TYPES[file.content_type]
     file_id = uuid.uuid4()
     filename = file.filename or f"upload.{file_ext}"
+    if len(filename) > 255:
+        raise HTTPException(status_code=400, detail="文件名不能超过 255 个字符")
+    if file.size is not None and file.size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="文件大小超过 20MiB 限制")
 
     if current_user:
         upload_dir = os.path.join(UPLOAD_DIR, str(current_user.id))
@@ -65,33 +68,52 @@ async def upload_file(
     stored_name = f"{file_id}.{file_ext}"
     file_path = os.path.join(upload_dir, stored_name)
 
-    with open(file_path, "wb") as f:
-        f.write(content)
+    # A sync endpoint runs in FastAPI's thread pool: file and DB I/O never
+    # block the event loop, and each source read is bounded.
+    size = 0
+    try:
+        with open(file_path, "xb") as output:
+            while chunk := file.file.read(UPLOAD_CHUNK_SIZE):
+                size += len(chunk)
+                if size > MAX_FILE_SIZE:
+                    raise HTTPException(status_code=413, detail="文件大小超过 20MiB 限制")
+                output.write(chunk)
 
-    oss_path = file_path if current_user else None
+        doc = Document(
+            id=file_id,
+            user_id=current_user.id if current_user else None,
+            filename=filename,
+            file_type=file_ext,
+            file_size=size,
+            oss_path=file_path,
+            status="uploaded",
+            file_status="active",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+        )
+        db.add(doc)
+        db.flush()
+        response = DocumentResponse(id=str(file_id), filename=filename,
+                                    file_type=file_ext, file_size=size, status="uploaded")
+    except Exception:
+        # COMMIT has not been sent: this file cannot have been published.
+        try:
+            db.rollback()
+        finally:
+            Path(file_path).unlink(missing_ok=True)
+        raise
 
-    doc = Document(
-        id=file_id,
-        user_id=current_user.id if current_user else None,
-        filename=filename,
-        file_type=file_ext,
-        file_size=len(content),
-        oss_path=oss_path or file_path,
-        status="uploaded",
-        file_status="active",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
-    )
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
-
-    return DocumentResponse(
-        id=str(doc.id),
-        filename=doc.filename,
-        file_type=doc.file_type,
-        file_size=doc.file_size,
-        status=doc.status,
-    )
+    try:
+        db.commit()
+    except IntegrityError:
+        # PostgreSQL explicitly rejected the transaction (e.g. deferred FK).
+        try:
+            db.rollback()
+        finally:
+            Path(file_path).unlink(missing_ok=True)
+        raise
+    # Other commit failures have an unknown outcome. Preserve the file for
+    # reconciliation rather than removing a possibly committed document.
+    return response
 
 
 @router.delete("/{document_id}", status_code=204)
@@ -113,6 +135,8 @@ def delete_document(
         if task.error_code == "ERR_ACCESS":
             raise HTTPException(status_code=403, detail="任务来源权限无法确认")
         require_owner(task.user_id, current_user)
+        if has_unresolved_ocr_submission(task):
+            raise HTTPException(status_code=409, detail="OCR提交记录待人工核对，完成核对前不能删除源文件")
         if task.status in {"waiting", "processing"}:
             raise HTTPException(status_code=409, detail="文档仍被活动任务引用，请先取消任务")
 

@@ -2,17 +2,19 @@
 
 import { useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { useToolPage } from "@/lib/useToolPage";
 import { ToolPageLayout } from "@/components/ToolPageLayout";
 
 const MAX_SIZE = 20 * 1024 * 1024;
 const ANGLE_OPTIONS = [
-  { value: 90, label: "顺时针 90°" },
-  { value: 180, label: "旋转 180°" },
-  { value: 270, label: "逆时针 90°" },
-];
+  { value: 90, label: "pdf.rotate.clockwise" },
+  { value: 180, label: "pdf.rotate.halfTurn" },
+  { value: 270, label: "pdf.rotate.counterclockwise" },
+] as const;
 
 export default function RotatePage() {
+  const { t } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [angle, setAngle] = useState(90);
   const [pages, setPages] = useState("all");
@@ -32,11 +34,11 @@ export default function RotatePage() {
 
   const handleFileSelect = (f: File) => {
     if (!f.name.toLowerCase().endsWith(".pdf")) {
-      setLocalError("仅支持 PDF 格式");
+      setLocalError(t("pdf.onlyPdf"));
       return;
     }
     if (f.size > MAX_SIZE) {
-      setLocalError("文件超过 20MB 限制");
+      setLocalError(t("convert.fileTooLarge"));
       return;
     }
     setFile(f);
@@ -47,7 +49,7 @@ export default function RotatePage() {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
     if (f) handleFileSelect(f);
-  }, []);
+  }, [t]);
 
   const handleStart = async () => {
     if (!file) return;
@@ -66,20 +68,24 @@ export default function RotatePage() {
 
   return (
     <ToolPageLayout
-      title="PDF 旋转"
-      subtitle="旋转 PDF 页面方向"
+      title={t("taskType.pdfRotate")}
+      subtitle={t("pdf.rotate.subtitle")}
       stage={tool.stage}
       uploadProgress={tool.uploadProgress}
+      conversionProgress={tool.conversionProgress}
+      progressDetail={tool.progressDetail}
+      canCancel={tool.canCancel}
+      onCancel={tool.cancel}
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
       taskType="pdf_rotate"
       canPreview
       showPreview={tool.showPreview}
-      previewLabel="预览 PDF"
-      downloadLabel="下载 PDF"
-      convertingLabel="旋转中..."
-      doneLabel="旋转完成！"
+      previewLabel={t("convert.previewPdf")}
+      downloadLabel={t("imagesToPdf.downloadPdf")}
+      convertingLabel={t("pdf.rotate.busy")}
+      doneLabel={t("pdf.rotate.done")}
       onDownload={tool.download}
       onPreview={tool.preview}
       onClosePreview={tool.closePreview}
@@ -108,8 +114,8 @@ export default function RotatePage() {
           </div>
         ) : (
           <div>
-            <p className="text-tertiary">点击或拖拽 PDF 到此处</p>
-            <p className="text-xs text-muted mt-2">最大 20MB</p>
+            <p className="text-tertiary">{t("pdf.dropzone")}</p>
+            <p className="text-xs text-muted mt-2">{t("pdf.maxSize")}</p>
           </div>
         )}
       </div>
@@ -117,7 +123,7 @@ export default function RotatePage() {
       {file && (
         <>
           <div>
-            <label className="block text-sm font-medium mb-2">旋转角度</label>
+            <label className="block text-sm font-medium mb-2">{t("pdf.rotate.angle")}</label>
             <div className="grid grid-cols-3 gap-2">
               {ANGLE_OPTIONS.map((opt) => (
                 <button
@@ -129,22 +135,22 @@ export default function RotatePage() {
                       : "border-border hover:border-brand-light"
                   }`}
                 >
-                  {opt.label}
+                  {t(opt.label)}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">应用范围</label>
+            <label className="block text-sm font-medium mb-2">{t("pdf.rotate.pages")}</label>
             <input
               type="text"
               value={pages}
               onChange={(e) => setPages(e.target.value)}
-              placeholder="all 或 1-3,5,7"
+              placeholder={t("pdf.rotate.placeholder")}
               className="w-full border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <p className="text-xs text-muted mt-1">输入 all 表示全部页面，或指定页码如 1-3,5</p>
+            <p className="text-xs text-muted mt-1">{t("pdf.rotate.hint")}</p>
           </div>
         </>
       )}
@@ -154,7 +160,7 @@ export default function RotatePage() {
         disabled={!file}
         className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        开始旋转
+        {t("pdf.rotate.start")}
       </button>
     </ToolPageLayout>
   );

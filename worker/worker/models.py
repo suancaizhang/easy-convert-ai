@@ -40,6 +40,8 @@ class Task(Base):
     task_type: Mapped[str] = mapped_column(String(30))
     ocr_mode: Mapped[str | None] = mapped_column(String(20))
     actual_engine: Mapped[str | None] = mapped_column(String(30))
+    ocr_job_state: Mapped[str | None] = mapped_column(String(20))
+    ocr_job_id: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20))
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))

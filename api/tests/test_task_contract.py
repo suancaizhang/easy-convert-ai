@@ -188,6 +188,82 @@ class TaskContractTests(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/tasks/{task_id}/status", headers=self.headers).status_code, 200)
         self.assertEqual(self.client.delete(f"/api/documents/{sources[0]}", headers=self.headers).status_code, 204)
 
+    def test_guest_anchor_deletion_still_checks_task_ownership(self):
+        from app.models import Document, Task
+
+        document_id = self.document(owner=False)
+        created = self.create(document_id, headers=self.headers)
+        self.assertEqual(created.status_code, 201, created.text)
+        task_id = uuid.UUID(created.json()["id"])
+        with self.session_factory() as db:
+            db.get(Task, task_id).status = "success"
+            db.commit()
+
+        response = self.client.delete(
+            f"/api/documents/{document_id}", headers=self.other_headers
+        )
+        self.assertEqual(response.status_code, 403, response.text)
+        with self.session_factory() as db:
+            self.assertIsNotNone(db.get(Task, task_id))
+            self.assertIsNotNone(db.get(Document, uuid.UUID(document_id)))
+
+    def test_unresolved_ocr_submission_evidence_blocks_anchor_deletion(self):
+        from app.models import Document, Task, User
+
+        document_id = uuid.UUID(self.document())
+        with self.session_factory() as db:
+            document = db.get(Document, document_id)
+            source_path = Path(document.oss_path)
+            db.get(User, self.owner).daily_quota_used = 1
+            task = Task(
+                document_id=document_id,
+                user_id=self.owner,
+                task_type="ocr_to_word",
+                status="failed",
+                quota_date=datetime.now(timezone.utc).date(),
+                quota_refunded=False,
+                ocr_job_state="uncertain",
+                error_code="ERR_OCR_UNCERTAIN",
+            )
+            db.add(task)
+            db.commit()
+            task_id = task.id
+
+        response = self.client.delete(f"/api/documents/{document_id}", headers=self.headers)
+        self.assertEqual(response.status_code, 409, response.text)
+        with self.session_factory() as db:
+            self.assertIsNotNone(db.get(Task, task_id))
+            self.assertIsNotNone(db.get(Document, document_id))
+        self.assertEqual(self.used(), 1)
+        self.assertTrue(source_path.exists())
+
+    def test_reconciled_ocr_submission_does_not_block_anchor_deletion(self):
+        from app.models import Document, Task
+
+        document_id = uuid.UUID(self.document())
+        with self.session_factory() as db:
+            document = db.get(Document, document_id)
+            source_path = Path(document.oss_path)
+            task = Task(
+                document_id=document_id,
+                user_id=self.owner,
+                task_type="ocr_to_word",
+                status="failed",
+                quota_date=datetime.now(timezone.utc).date(),
+                quota_refunded=True,
+                ocr_job_state="rejected",
+                error_code="ERR_003",
+            )
+            db.add(task)
+            db.commit()
+
+        response = self.client.delete(f"/api/documents/{document_id}", headers=self.headers)
+        self.assertEqual(response.status_code, 204, response.text)
+        self.assertFalse(source_path.exists())
+
+
+
+
 
 if __name__ == "__main__":
     unittest.main()

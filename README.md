@@ -9,17 +9,17 @@ AI 驱动的在线文档转换平台，支持 PDF、Office 文件与图片转换
 - [任务归属、持久化投递与产物列表](docs/adr/0004-task-ownership-delivery-and-artifacts.md)：权限、计费、派发和恢复契约。
 - [多文件主文档决策](docs/adr/0001-multi-file-task-document-id-anchor.md)、[OCR 输出格式决策](docs/adr/0002-ocr-single-task-type-with-output-format-param.md)、[游客使用策略](docs/adr/0003-guest-unrestricted-except-ocr.md)、[微信小程序参赛端决策](docs/adr/0005-wechat-miniprogram-contest-entry.md)。
 
-2026-09-12 整改验证：API/Worker生命周期与迁移20项、转换完整性10项、前端15项测试通过；Node20.19生产构建通过；npm生产依赖审计未报告漏洞。真实分进程转换与桌面/移动浏览器预览已验证。**完整Docker部署、收费云OCR和Python依赖漏洞审计尚未完成，不代表已获上线批准。** 详细环境与证据边界以审查记录为准。
+2026-10-03 整改验证：隔离PostgreSQL下API/迁移/生命周期47项、Worker23项、Web38项、小程序8项测试通过；Web生产构建及小程序干净安装后的weapp构建通过。真实分进程转换、桌面/移动浏览器结果访问及PDF/DOCX/图片预览已验证。Python依赖审计无已知漏洞；Web生产audit为0，小程序生产audit仍有4项Swiper关联告警（当前weapp包不含该模块）。**真实微信、收费云OCR、Docker/CloudBase部署尚未验收，不代表已获上线批准。** 详细环境与证据边界以审查记录为准。
 
 ## 功能与限制
 
-- PDF→Word 提取文字及内嵌图片；不承诺完整保留原版式。
-- Word、Excel、PPT→PDF 使用 LibreOffice；PDF→PNG 按页输出（150 DPI）。
+- PDF→Word 保留可编辑文字、内嵌图片及栅格化的矢量图形；内容重排，不承诺原版式或可编辑矢量。
+- Word、Excel、PPT→PDF 使用每次调用独立 profile 的 LibreOffice；PDF→PNG 按页输出（150 DPI），最多50页、单页2500万像素、累计2亿像素及256MiB PNG产物，超限在安全边界拒绝。
 - 多图合并页面支持2～20张图片；PDF工具包括合并、拆分、压缩、旋转和水印。
 - OCR 使用 PaddleOCR-VL 1.6，输入可为图片或PDF，输出 DOCX、TXT 或可搜索PDF。没有 MiMo、DeepSeek 或本地 fallback。
-- 注册用户使用 JWT；免费用户计费转换8次/UTC日，PDF工具免扣配额。注册用户同时只允许一个 waiting/processing 任务。
+- 注册用户使用 JWT；密码至少6字符、UTF-8编码最多72字节，避免bcrypt静默截断。免费用户计费转换8次/UTC日，PDF工具免扣配额。注册用户同时只允许一个 waiting/processing 任务。
 - 游客非OCR不限次数；OCR必须登录。私有来源与任务均校验权限，提供无效认证不能降级为游客绕过检查。
-- 历史页支持分页和删除，但部分工具类型识别、OCR格式预览及分页边界仍待修复。
+- Web历史页支持12种任务的结果预览、下载、分页和删除，按实际输出扩展名渲染OCR三格式；请求/上传有30秒/120秒期限，临时网络故障不清除登录token。小程序历史按服务端total加载更多，图片结果按所选页下载；参数在上传前校验，数值以JSON number提交。
 - 删除成功返回204；活动任务引用的文档返回409。删除主文档会删除其任务记录并尝试清理源文件及产物；物理清理失败不会回滚数据库，也没有自动过期清理。
 - 微信小程序端（`miniprogram/`，2026 大赛参赛版，ADR0005）：Taro3+React 独立安装根，覆盖 12 类转换全流程；`wx.login` → `POST /api/auth/wechat/login` 用 code 换 openid 签发同一 JWT，微信用户 `email`/`password_hash` 为 NULL，OCR 登录约束与配额仍由 API 强制。未配置 `WECHAT_APPID`/`WECHAT_SECRET` 时微信登录返回 503。
 
@@ -155,7 +155,7 @@ npm run dev:weapp   # watch构建；产物 miniprogram/dist 由微信开发者�
 |POST|`/api/auth/register`、`/api/auth/login`|注册/登录，返回JWT|
 |POST|`/api/auth/wechat/login`|小程序登录：`code`（+可选`avatar`）换openid，新用户自动注册（`email`/`password_hash`为NULL），返回同一JWT；需配置微信凭据|
 |GET|`/api/auth/me`|当前用户|
-|POST|`/api/documents/upload`|multipart文件上传；当前按声明MIME和20MiB限制检查，非完整内容验证|
+|POST|`/api/documents/upload`|multipart文件上传；请求体解析前累计上限21MiB，文件上限20MiB，文件名最多255字符；按声明MIME检查，非完整内容验证|
 |DELETE|`/api/documents/{id}`|按文档及关联任务权限删除；成功204、活动引用409；隔离历史任务拒绝普通删除|
 |GET|`/api/documents/history`|登录用户分页历史|
 |POST|`/api/tasks/create`|单来源，或通过有序 `source_document_ids` 创建多来源任务；首项为主文档|
@@ -195,14 +195,14 @@ npm run dev:weapp   # watch构建；产物 miniprogram/dist 由微信开发者�
 - `miniprogram/src/`：Taro 页面（index/result/history/login）、`api/client.ts` 统一请求与401处理、`conversions.ts` 12类转换声明表；构建产物 `dist/` 不入库。
 - `api/app/wechat.py`、`routers/auth.py`：jscode2session 换取 openid 与小程序登录端点。
 - `api/app/task_service.py`、`dispatcher.py`、`routers/`：任务准入、持久化派发及HTTP边界。
-- `api/alembic/versions/`：001～004迁移；共享模型在API和Worker两侧维护。
+- `api/alembic/versions/`：001～005迁移；共享模型在API和Worker两侧维护。
 - `worker/worker/tasks.py`、`converters/`、`services/paddle_vl.py`：任务生命周期、12种转换和云OCR。
 
-前端在 `web/` 执行 `npm run test`、`npm run build`；生产依赖检查使用 `npm audit --omit=dev --registry=https://registry.npmjs.org`。
+小程序在 `miniprogram/` 执行 `npm test`、`npx tsc --noEmit`、`npm run build:weapp`；不提供H5构建入口。前端在 `web/` 执行 `npm run test`、`npm run build`；生产依赖检查使用 `npm audit --omit=dev --registry=https://registry.npmjs.org`。
 
 **后端集成测试会清空应用表并执行迁移回退，只能使用隔离测试库。** 安装与运行方式见[审查记录的回归说明](docs/issues/04-project-audit-2026-09-12.md#回归运行方式)，不要指向真实用户数据库。
 
-未关闭事项包括文件过期/孤儿清理、上传资源预算、认证限流、OCR外部作业幂等、部分前端生命周期与可访问性。当前没有R2存储适配器或生产级监控；微信登录（小程序端）已按 ADR0005 实现，Web 端仍无微信 OAuth。以审查记录为准，不依据历史方案推断已实现功能。
+未关闭事项包括文件过期/孤儿清理、认证限流、Web历史删除后的分页边界及尚未覆盖的可访问性。上传及PDF栅格已有资源预算；OCR已持久化供应商作业，已知ID只恢复、不重复提交；提交未知时停止重试并保留应用配额待人工核对，不宣称供应商exactly-once。小程序仅支持weapp：生产依赖审计仍有4项Swiper关联告警，当前weapp产物不含该模块，不能据此宣称依赖树无漏洞。当前没有R2存储适配器或生产级监控；微信登录（小程序端）已按 ADR0005 实现，Web 端仍无微信 OAuth。以审查记录为准，不依据历史方案推断已实现功能。
 
 ## License
 

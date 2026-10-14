@@ -6,8 +6,9 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
 } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 interface User {
   id: string;
@@ -34,15 +35,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const requestRef = useRef<AbortController | null>(null);
+
   const fetchUser = useCallback(async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const token = localStorage.getItem("token");
+    setLoading(true);
     try {
-      const u = await api.get<User>("/api/auth/me");
-      setUser(u);
-    } catch {
-      setUser(null);
-      localStorage.removeItem("token");
+      const u = await api.get<User>("/api/auth/me", { signal: controller.signal });
+      if (!controller.signal.aborted && localStorage.getItem("token") === token) setUser(u);
+    } catch (error) {
+      if (!controller.signal.aborted && localStorage.getItem("token") === token && error instanceof ApiError && error.status === 401) {
+        setUser(null);
+        localStorage.removeItem("token");
+      }
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -53,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       setLoading(false);
     }
+    return () => requestRef.current?.abort();
   }, [fetchUser]);
 
   const login = (token: string) => {
@@ -61,6 +72,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
+    requestRef.current?.abort();
+    setLoading(false);
     localStorage.removeItem("token");
     setUser(null);
   };

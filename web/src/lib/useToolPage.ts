@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { api, ApiError } from "@/lib/api";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8111";
+import { downloadTaskFile } from "./fetchTaskFile";
+import { getTranslation as t } from "./i18n";
 
 export type ToolStage = "idle" | "uploading" | "converting" | "done" | "error";
 
@@ -59,174 +59,19 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
   const [taskId, setTaskId] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const operationRef = useRef<AbortController | null>(null);
 
-  const stopPolling = () => {
-    if (pollingRef.current) {
-      clearTimeout(pollingRef.current);
-      pollingRef.current = null;
-    }
-  };
-
-  const startPolling = useCallback((id: string) => {
-    let attempts = 0;
-    let interval = 2000;
-    let hasProgress = false;
-
-    const poll = async () => {
-      try {
-        const res = await api.get<StatusResponse>(`/api/tasks/${id}/status`);
-        setTaskStatus(res.status);
-
-        // Update progress if available
-        if (res.progress != null) {
-          hasProgress = true;
-          setConversionProgress(res.progress);
-          if (res.progress_current != null && res.progress_total != null) {
-            setProgressDetail({ current: res.progress_current, total: res.progress_total });
-          }
-        }
-
-        if (res.status === "success") {
-          setConversionProgress(100);
-          setStage("done");
-          return;
-        }
-        if (res.status === "failed") {
-          setStage("error");
-          setError(res.error_message || "转换失败");
-          return;
-        }
-
-        attempts++;
-        if (attempts >= maxAttempts) {
-          setStage("error");
-          setError("任务超时，请重试");
-          return;
-        }
-
-        // Keep fast polling when progress is active (total > 5 items)
-        if (hasProgress && res.progress_total && res.progress_total > 5) {
-          interval = 2000;
-        } else if (attempts <= 5) {
-          interval = 2000;
-        } else if (attempts <= 10) {
-          interval = 5000;
-        } else {
-          interval = Math.min(interval * 1.5, 15000);
-        }
-
-        pollingRef.current = setTimeout(poll, interval);
-      } catch {
-        attempts++;
-        if (attempts >= maxAttempts) {
-          setStage("error");
-          setError("连接超时，请重试");
-          return;
-        }
-        pollingRef.current = setTimeout(poll, 5000);
-      }
-    };
-
-    pollingRef.current = setTimeout(poll, 2000);
-  }, [maxAttempts]);
-
-  const uploadAndRun = useCallback(async (files: File[], params?: Record<string, unknown>) => {
-    setError("");
-    setStage("uploading");
-    setUploadProgress(0);
-    setConversionProgress(0);
-    setProgressDetail(null);
-
-    try {
-      const total = files.length;
-      const documentIds: string[] = [];
-
-      for (let i = 0; i < files.length; i++) {
-        const doc = await api.upload<{ id: string }>(
-          "/api/documents/upload",
-          files[i],
-          (pct) => setUploadProgress(Math.round((i * 100 + pct) / total))
-        );
-        documentIds.push(doc.id);
-      }
-
-      setUploadProgress(100);
-      setStage("converting");
-
-      const id = await createTask(documentIds, params);
-      setTaskId(id);
-      setTaskStatus("waiting");
-      startPolling(id);
-    } catch (err) {
-      setStage("error");
-      setError(err instanceof ApiError ? err.message : "操作失败，请重试");
-    }
-  }, [createTask, startPolling]);
-
-  const cancel = useCallback(async () => {
-    if (!taskId) return;
-    try {
-      await api.post(`/api/tasks/${taskId}/cancel`);
-      stopPolling();
-      setStage("idle");
-      setTaskStatus("");
-      setConversionProgress(0);
-      setProgressDetail(null);
-      setTaskId("");
-    } catch {
-      // 409 or other error — task already processing, let polling continue
-    }
-  }, [taskId]);
-
-  const canCancel = stage === "converting" && taskStatus === "waiting";
-
-  const fetchResult = useCallback(async (preview: boolean): Promise<void> => {
-    if (!taskId) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    const url = `${API_URL}/api/tasks/${taskId}/download${preview ? "?preview=1" : ""}`;
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error("请求失败");
-    const blob = await res.blob();
-
-    if (preview) {
-      window.open(URL.createObjectURL(blob), "_blank");
-      return;
-    }
-
-    const disposition = res.headers.get("content-disposition");
-    let filename = "converted_file";
-    if (disposition) {
-      const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
-      if (match) filename = decodeURIComponent(match[1].replace(/"/g, ""));
-    }
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }, [taskId]);
-
-  const download = useCallback(async () => {
-    try {
-      await fetchResult(false);
-    } catch {
-      setError("下载失败，请重试");
-    }
-  }, [fetchResult]);
-
-  const preview = useCallback(() => {
-    setShowPreview(true);
+  // One controller owns a run, including uploads, polling and downloads. Checking
+  // it after every await also guards transports/callbacks that cannot be aborted.
+  const stop = useCallback(() => {
+    operationRef.current?.abort();
+    if (pollingRef.current !== null) clearTimeout(pollingRef.current);
+    pollingRef.current = null;
   }, []);
-
-  const closePreview = useCallback(() => {
-    setShowPreview(false);
-  }, []);
+  useEffect(() => stop, [stop]);
 
   const reset = useCallback(() => {
-    stopPolling();
+    stop();
     setStage("idle");
     setUploadProgress(0);
     setConversionProgress(0);
@@ -235,7 +80,111 @@ export function useToolPage({ createTask, maxAttempts = 60 }: UseToolPageOptions
     setError("");
     setTaskId("");
     setShowPreview(false);
-  }, []);
+  }, [stop]);
+
+  const startPolling = useCallback((id: string, signal: AbortSignal) => {
+    let attempts = 0;
+    let interval = 2000;
+    const poll = async () => {
+      if (signal.aborted) return;
+      pollingRef.current = null;
+      try {
+        const res = await api.get<StatusResponse>(`/api/tasks/${id}/status`, { signal });
+        if (signal.aborted) return;
+        setTaskStatus(res.status);
+        if (res.progress != null) setConversionProgress(res.progress);
+        if (res.progress_current != null && res.progress_total != null) {
+          setProgressDetail({ current: res.progress_current, total: res.progress_total });
+        }
+        if (res.status === "success") {
+          setConversionProgress(100);
+          setError("");
+          setStage("done");
+          return;
+        }
+        if (res.status === "failed") {
+          setStage("error");
+          setError(res.error_message || t("tool.conversionFailed"));
+          return;
+        }
+        attempts++;
+        if (attempts >= maxAttempts) {
+          setStage("error");
+          setError(t("tool.taskTimeout"));
+          return;
+        }
+        interval = res.progress != null && (res.progress_total ?? 0) > 5 || attempts <= 5
+          ? 2000 : attempts <= 10 ? 5000 : Math.min(interval * 1.5, 15000);
+      } catch {
+        if (signal.aborted) return;
+        attempts++;
+        if (attempts >= maxAttempts) {
+          setStage("error");
+          setError(t("tool.connectionTimeout"));
+          return;
+        }
+        interval = 5000;
+      }
+      if (!signal.aborted) pollingRef.current = setTimeout(poll, interval);
+    };
+    pollingRef.current = setTimeout(poll, 2000);
+  }, [maxAttempts]);
+
+  const uploadAndRun = useCallback(async (files: File[], params?: Record<string, unknown>) => {
+    reset();
+    const controller = new AbortController();
+    operationRef.current = controller;
+    const { signal } = controller;
+    setStage("uploading");
+    try {
+      const documentIds: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const doc = await api.upload<{ id: string }>("/api/documents/upload", files[i], (pct) => {
+          if (!signal.aborted) setUploadProgress(Math.round((i * 100 + pct) / files.length));
+        }, signal);
+        if (signal.aborted) return;
+        documentIds.push(doc.id);
+      }
+      setUploadProgress(100);
+      setStage("converting");
+      const id = await createTask(documentIds, params);
+      if (signal.aborted) return;
+      setTaskId(id);
+      setTaskStatus("waiting");
+      startPolling(id, signal);
+    } catch (err) {
+      if (signal.aborted) return;
+      setStage("error");
+      setError(err instanceof ApiError ? err.message : t("tool.operationFailed"));
+    }
+  }, [createTask, reset, startPolling]);
+
+  const cancel = useCallback(async () => {
+    const signal = operationRef.current?.signal;
+    if (!taskId || !signal || signal.aborted) return;
+    try {
+      await api.post(`/api/tasks/${taskId}/cancel`, undefined, { signal });
+      if (!signal.aborted) reset();
+    } catch (err) {
+      if (signal.aborted) return;
+      // A rejected cancellation leaves the same run polling normally.
+      setError(err instanceof ApiError && err.status === 409 ? t("cancel.cannotCancel") : t("tool.cancelFailed"));
+    }
+  }, [taskId, reset]);
+
+  const download = useCallback(async () => {
+    const signal = operationRef.current?.signal;
+    if (!taskId || !signal || signal.aborted) return;
+    setError("");
+    try {
+      await downloadTaskFile(taskId, signal);
+    } catch {
+      if (!signal.aborted) setError(t("tool.downloadFailed"));
+    }
+  }, [taskId]);
+  const preview = useCallback(() => setShowPreview(true), []);
+  const closePreview = useCallback(() => setShowPreview(false), []);
+  const canCancel = stage === "converting" && taskStatus === "waiting";
 
   return {
     stage, uploadProgress, conversionProgress, progressDetail,

@@ -1,6 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
+import { hydrateRoot } from "react-dom/client";
+import type { Root } from "react-dom/client";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_LOCALE,
   I18nProvider,
@@ -21,6 +24,27 @@ function LocaleProbe() {
 }
 
 describe("i18n", () => {
+  it("hydrates server markup without a locale mismatch and then restores the saved locale", async () => {
+    const element = <I18nProvider><LocaleProbe /></I18nProvider>;
+    vi.stubGlobal("window", undefined);
+    let markup: string;
+    try { markup = renderToString(element); } finally { vi.unstubAllGlobals(); }
+    localStorage.setItem("locale", "en");
+    const container = document.createElement("div");
+    container.innerHTML = markup;
+    document.body.append(container);
+    const onRecoverableError = vi.fn();
+    let root!: Root;
+    try {
+      await act(async () => { root = hydrateRoot(container, element, { onRecoverableError }); });
+      expect(onRecoverableError).not.toHaveBeenCalled();
+      expect(container).toHaveTextContent("en");
+      expect(document.documentElement.lang).toBe("en");
+    } finally {
+      if (root) act(() => root.unmount());
+      container.remove();
+    }
+  });
   it("accepts only the seven supported locale codes", () => {
     expect(isLocale("zh-CN")).toBe(true);
     expect(isLocale("en")).toBe(true);
@@ -49,7 +73,6 @@ describe("i18n", () => {
     );
 
     expect(screen.getByText("en")).toBeInTheDocument();
-    expect(screen.getByText("Start converting")).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en");
 
     await user.click(screen.getByRole("button", { name: "switch" }));

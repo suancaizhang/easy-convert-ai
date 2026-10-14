@@ -4,6 +4,13 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { ToolStage, ProgressDetail } from "@/lib/useToolPage";
 import { FilePreview } from "@/components/preview";
+import { useI18n } from "@/lib/i18n";
+import type { TranslationKeys } from "@/i18n/types";
+
+const STATUS_KEYS: Record<string, keyof TranslationKeys> = {
+  waiting: "taskStatus.waiting", processing: "taskStatus.processing",
+  success: "taskStatus.success", failed: "taskStatus.failed",
+};
 
 interface ToolPageLayoutProps {
   title: string;
@@ -57,17 +64,17 @@ export function ToolPageLayout({
   canPreview = false,
   canCancel = false,
   showPreview = false,
-  previewLabel = "预览",
-  downloadLabel = "下载",
-  convertingLabel = "处理中...",
+  previewLabel,
+  downloadLabel,
+  convertingLabel,
   progressLabel,
-  cancelLabel = "取消",
-  doneLabel = "处理完成",
-  backLabel = "返回首页",
+  cancelLabel,
+  doneLabel,
+  backLabel,
   uploadingLabel,
   statusLabel,
-  retryLabel = "重试",
-  continueLabel = "继续处理",
+  retryLabel,
+  continueLabel,
   onDownload,
   onPreview,
   onClosePreview,
@@ -77,10 +84,11 @@ export function ToolPageLayout({
   footer,
   children,
 }: ToolPageLayoutProps) {
+  const { t } = useI18n();
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 relative">
       <Link href="/" className="absolute top-4 left-4 text-sm text-muted hover:text-brand">
-        {backLabel}
+        {backLabel ?? t("nav.backHome")}
       </Link>
 
       <div className="w-full max-w-2xl space-y-6">
@@ -89,12 +97,13 @@ export function ToolPageLayout({
           {subtitle && <p className="text-sm text-tertiary mt-1 font-content">{subtitle}</p>}
         </div>
 
+        {error && stage !== "error" && (
+          <div role="alert" className="bg-error-bg text-error-fg text-sm p-3 rounded-md">{error}</div>
+        )}
+
         {stage === "idle" && (
           <>
             {children}
-            {error && (
-              <div className="bg-error-bg text-error-fg text-sm p-3 rounded-md">{error}</div>
-            )}
             {footer}
           </>
         )}
@@ -102,14 +111,14 @@ export function ToolPageLayout({
         {stage === "uploading" && (
           <div className="text-center space-y-2 py-4">
             <div className="animate-spin w-8 h-8 border-4 border-brand-surface border-t-brand rounded-full mx-auto" />
-            <p className="text-sm text-tertiary">{uploadingLabel ?? `上传中 ${uploadProgress}%`}</p>
+            <p className="text-sm text-tertiary">{uploadingLabel ?? t("convert.uploading", { progress: uploadProgress })}</p>
           </div>
         )}
 
         {stage === "converting" && (
           <div className="text-center space-y-4 py-8">
             <div className="animate-spin w-10 h-10 border-4 border-brand-surface border-t-brand rounded-full mx-auto" />
-            <p className="text-secondary">{convertingLabel}</p>
+            <p className="text-secondary">{convertingLabel ?? t("convert.converting")}</p>
 
             {/* Progress bar */}
             {conversionProgress > 0 && (
@@ -130,7 +139,7 @@ export function ToolPageLayout({
             )}
 
             {taskStatus && !conversionProgress && (
-              <p className="text-sm text-muted">{statusLabel ?? `状态：${taskStatus}`}</p>
+              <p className="text-sm text-muted">{statusLabel ?? t("convert.status", { status: STATUS_KEYS[taskStatus] ? t(STATUS_KEYS[taskStatus]) : taskStatus })}</p>
             )}
 
             {/* Cancel button — only when task is still waiting in queue */}
@@ -139,7 +148,7 @@ export function ToolPageLayout({
                 onClick={onCancel}
                 className="text-sm text-muted hover:text-error-fg font-ui"
               >
-                {cancelLabel}
+                {cancelLabel ?? t("cancel.button")}
               </button>
             )}
           </div>
@@ -152,26 +161,26 @@ export function ToolPageLayout({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="font-medium">{doneLabel}</p>
+            <p className="font-medium">{doneLabel ?? t("convert.done")}</p>
             {canPreview && onPreview && (
               <button
                 onClick={onPreview}
                 className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui"
               >
-                {previewLabel}
+                {previewLabel ?? t("convert.previewFile")}
               </button>
             )}
             <button
               onClick={onDownload}
               className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui"
             >
-              {downloadLabel}
+              {downloadLabel ?? t("convert.download")}
             </button>
             <button
               onClick={onReset}
               className="w-full border border-border rounded-md py-3 text-sm hover:bg-page font-ui"
             >
-              {continueLabel}
+              {continueLabel ?? t("convert.continue")}
             </button>
             {extraActions}
           </div>
@@ -184,12 +193,12 @@ export function ToolPageLayout({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <p className="text-error-fg">{error}</p>
+            <p role="alert" className="text-error-fg">{error}</p>
             <button
               onClick={onReset}
               className="w-full border border-border rounded-md py-3 text-sm hover:bg-page font-ui"
             >
-              {retryLabel}
+              {retryLabel ?? t("convert.retry")}
             </button>
             {extraActions}
           </div>

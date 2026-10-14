@@ -1,5 +1,5 @@
 import Taro from '@tarojs/taro'
-import { clearToken, getToken } from '../utils/storage'
+import { getToken, handleUnauthorized } from '../utils/storage'
 
 /** 构建期通过 TARO_APP_API_BASE 注入；默认本机联调地址 */
 export const API_BASE: string = (process.env.TARO_APP_API_BASE || 'http://127.0.0.1:8111').replace(/\/+$/, '')
@@ -38,9 +38,6 @@ export async function request<T>({ path, method = 'GET', data }: RequestOptions)
   })
   if (res.statusCode >= 200 && res.statusCode < 300) return res.data as T
 
-  if (res.statusCode === 401 && path !== LOGIN_PATH) {
-    clearToken()
-    Taro.reLaunch({ url: '/pages/login/index' })
-  }
+  if (path !== LOGIN_PATH) handleUnauthorized(res.statusCode)
   throw new Error(errorMessage(res.data, '请求失败，请稍后再试'))
 }

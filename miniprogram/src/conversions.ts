@@ -9,6 +9,10 @@ export interface ParamDef {
   default?: string
   /** API 侧为数值字段，提交时发送 JSON number；避免依赖 Pydantic 的字符串强转差异。 */
   numeric?: boolean
+  min?: number
+  max?: number
+  maxLength?: number
+  pattern?: RegExp
 }
 
 export interface ConversionDef {
@@ -20,6 +24,33 @@ export interface ConversionDef {
   extensions?: string[]
   max: number
   params?: ParamDef[]
+}
+
+// Matches the API SplitParameters/RotateParameters page syntax.
+const PAGE_RANGE = /^\s*[1-9]\d*(\s*-\s*[1-9]\d*)?(\s*,\s*[1-9]\d*(\s*-\s*[1-9]\d*)?)*\s*$/
+const ROTATE_RANGE = /^(all|\s*[1-9]\d*(\s*-\s*[1-9]\d*)?(\s*,\s*[1-9]\d*(\s*-\s*[1-9]\d*)?)*\s*)$/
+
+export function buildParams(def: ConversionDef, values: Record<string, string>): Record<string, string | number> {
+  const params: Record<string, string | number> = {}
+  for (const field of def.params || []) {
+    const value = values[field.key] ?? field.default ?? ''
+    if (!value.trim()) throw new Error(`请填写${field.label}`)
+    if ((field.maxLength && Array.from(value).length > field.maxLength) || (field.pattern && !field.pattern.test(value))) {
+      throw new Error(`${field.label}格式不正确`)
+    }
+    if (field.numeric) {
+      const number = Number(value)
+      if (!Number.isFinite(number) || (field.min != null && number < field.min) || (field.max != null && number > field.max) ||
+          (field.min == null && field.options && !field.options.some((option) => Number(option.value) === number))) {
+        throw new Error(`${field.label}数值不合法`)
+      }
+      params[field.key] = number
+    } else {
+      if (field.options && !field.options.some((option) => option.value === value)) throw new Error(`${field.label}选项不合法`)
+      params[field.key] = value
+    }
+  }
+  return params
 }
 
 export const CONVERSIONS: ConversionDef[] = [
@@ -85,6 +116,8 @@ export const CONVERSIONS: ConversionDef[] = [
         kind: 'input',
         placeholder: '如 1-3, 5, 7-9',
         default: '1',
+        maxLength: 1000,
+        pattern: PAGE_RANGE,
       },
     ],
   },
@@ -135,6 +168,8 @@ export const CONVERSIONS: ConversionDef[] = [
         kind: 'input',
         placeholder: '默认 all，或如 1-3,5',
         default: 'all',
+        maxLength: 1000,
+        pattern: ROTATE_RANGE,
       },
     ],
   },
@@ -151,6 +186,7 @@ export const CONVERSIONS: ConversionDef[] = [
         label: '水印文字',
         kind: 'input',
         placeholder: '输入水印内容',
+        maxLength: 500,
       },
       {
         key: 'opacity',
@@ -158,6 +194,8 @@ export const CONVERSIONS: ConversionDef[] = [
         kind: 'select',
         default: '0.3',
         numeric: true,
+        min: 0.05,
+        max: 1,
         options: [
           { label: '淡', value: '0.1' },
           { label: '中', value: '0.3' },

@@ -2,17 +2,19 @@
 
 import { useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { useToolPage } from "@/lib/useToolPage";
 import { ToolPageLayout } from "@/components/ToolPageLayout";
 
 const MAX_SIZE = 20 * 1024 * 1024;
 const QUALITY_OPTIONS = [
-  { value: "low", label: "低质量（文件最小）" },
-  { value: "medium", label: "中等质量" },
-  { value: "high", label: "高质量（文件较大）" },
-];
+  { value: "low", label: "pdf.compress.low" },
+  { value: "medium", label: "pdf.compress.medium" },
+  { value: "high", label: "pdf.compress.high" },
+] as const;
 
 export default function CompressPage() {
+  const { t } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [quality, setQuality] = useState("medium");
   const [localError, setLocalError] = useState("");
@@ -31,11 +33,11 @@ export default function CompressPage() {
 
   const handleFileSelect = (f: File) => {
     if (!f.name.toLowerCase().endsWith(".pdf")) {
-      setLocalError("仅支持 PDF 格式");
+      setLocalError(t("pdf.onlyPdf"));
       return;
     }
     if (f.size > MAX_SIZE) {
-      setLocalError("文件超过 20MB 限制");
+      setLocalError(t("convert.fileTooLarge"));
       return;
     }
     setFile(f);
@@ -46,7 +48,7 @@ export default function CompressPage() {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
     if (f) handleFileSelect(f);
-  }, []);
+  }, [t]);
 
   const handleStart = async () => {
     if (!file) return;
@@ -64,20 +66,24 @@ export default function CompressPage() {
 
   return (
     <ToolPageLayout
-      title="PDF 压缩"
-      subtitle="压缩 PDF 文件大小"
+      title={t("taskType.pdfCompress")}
+      subtitle={t("pdf.compress.subtitle")}
       stage={tool.stage}
       uploadProgress={tool.uploadProgress}
+      conversionProgress={tool.conversionProgress}
+      progressDetail={tool.progressDetail}
+      canCancel={tool.canCancel}
+      onCancel={tool.cancel}
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
       taskType="pdf_compress"
       canPreview
       showPreview={tool.showPreview}
-      previewLabel="预览 PDF"
-      downloadLabel="下载压缩后的 PDF"
-      convertingLabel="压缩中..."
-      doneLabel="压缩完成！"
+      previewLabel={t("convert.previewPdf")}
+      downloadLabel={t("pdf.compress.download")}
+      convertingLabel={t("pdf.compress.busy")}
+      doneLabel={t("pdf.compress.done")}
       onDownload={tool.download}
       onPreview={tool.preview}
       onClosePreview={tool.closePreview}
@@ -106,15 +112,15 @@ export default function CompressPage() {
           </div>
         ) : (
           <div>
-            <p className="text-tertiary">点击或拖拽 PDF 到此处</p>
-            <p className="text-xs text-muted mt-2">最大 20MB</p>
+            <p className="text-tertiary">{t("pdf.dropzone")}</p>
+            <p className="text-xs text-muted mt-2">{t("pdf.maxSize")}</p>
           </div>
         )}
       </div>
 
       {file && (
         <div>
-          <label className="block text-sm font-medium mb-2">压缩质量</label>
+          <label className="block text-sm font-medium mb-2">{t("pdf.compress.quality")}</label>
           <div className="grid grid-cols-3 gap-2">
             {QUALITY_OPTIONS.map((opt) => (
               <button
@@ -126,7 +132,7 @@ export default function CompressPage() {
                     : "border-border hover:border-brand-light"
                 }`}
               >
-                {opt.label}
+                {t(opt.label)}
               </button>
             ))}
           </div>
@@ -138,7 +144,7 @@ export default function CompressPage() {
         disabled={!file}
         className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        开始压缩
+        {t("pdf.compress.start")}
       </button>
     </ToolPageLayout>
   );

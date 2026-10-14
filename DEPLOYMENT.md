@@ -64,14 +64,20 @@ Redis 开启 AOF。应用服务自动重启；这不是备份方案。
 
 1. 停止接受新请求，等待活动任务结束；确认队列和任务状态。不要直接删除旧容器或卷。
 2. 备份 PostgreSQL 及三个文件存储目录。旧版本成功结果在 Worker 容器 `/tmp/convert_*` 时，先从旧容器复制保全；删除容器会丢掉它们。
-3. 停止旧 Worker、API；部署新代码，执行迁移。迁移将旧逗号分隔 `result_path` 转为 `result_paths` JSONB，依据全部来源的唯一非空 owner 回填任务归属；冲突 owner 或缺失来源的历史任务标记 `ERR_ACCESS`，普通读取/删除均被拒绝，需人工核对。迁移不会搬运磁盘文件，也不能从仅游客来源的旧记录恢复真实创建者。
+3. 停止旧 Worker、dispatcher、API；部署新代码，执行迁移至005。迁移将旧逗号分隔 `result_path` 转为 `result_paths` JSONB，依据全部来源的唯一非空 owner 回填任务归属；冲突 owner 或缺失来源的历史任务标记 `ERR_ACCESS`，普通读取/删除均被拒绝，需人工核对。迁移不会搬运磁盘文件，也不能从仅游客来源的旧记录恢复真实创建者。
 4. 如需保留旧结果下载，把旧目录复制到共享结果存储，并在受控迁移中同步更新 `result_paths` 中的绝对路径。不能只搬文件不改路径，也不能假定数据库迁移能读取旧 Worker 容器。
 5. 新字段无法从历史任务推断真实扣费事实：迁移不伪造 `quota_date`。旧任务不会被自动补扣/补退；历史账务如需调整，应基于实际记录单独处理。
 6. 启动全部服务，验证新任务的创建、派发、完成、下载、取消及失败退款。重新构建 web，确认浏览器请求正确 API 地址。
 
+### 005 OCR恢复字段升级
+
+005增加 `ocr_job_state` 和 `ocr_job_id`。必须先停止旧Worker，再迁移并同步部署新API/Worker；旧Worker不会读取恢复字段，混跑可能重复收费。迁移把旧活动OCR中 `processing` 或 `retry_count > 0` 的记录隔离为 `failed / ERR_OCR_UNCERTAIN`，不伪造提交ID或修改配额事实。操作员需核对供应商任务及计费记录后人工处置，不能把这些任务直接改回waiting重试。
+
 ### 回退
 
 优先恢复协调备份并部署同一版本的一组服务。不要在有新任务时直接运行旧 Worker。
+
+005只要存在非NULL `ocr_job_state` 或 `ocr_job_id` 就拒绝downgrade，避免丢失收费作业恢复证据；回退前必须核对、归档并受控处置这些事实，不能直接清空字段绕过保护。
 
 `result_paths` 可以超过旧 `varchar(512)` 容量；migration downgrade 不能无损地把任意新产物压回512字符。具体回退限制以迁移实现为准，先在备份副本执行。不要通过截断结果列表“回退”。
 
@@ -119,7 +125,7 @@ npm run dev
 - **发送成功但标记前崩溃**：可能重复发送同一个任务 ID；Worker 执行互斥，终态任务直接返回。
 - **转换暂时失败**：Celery retry，不提前标终态或退款。Retry发布失败则恢复数据库待派发意图。
 - **数据库故障/失锁**：重排原消息，恢复后重新获取执行锁；不在失锁后重连结算。成功提交响应丢失时保留可能已被引用的产物；不能直接清空这些目录，需先核对数据库引用。
-- **最终失败/排队取消**：以任务实际扣费记录一次性退款；不冲减另一计费日期。
+- **最终失败/排队取消**：以任务实际扣费记录一次性退还应用配额；不冲减另一计费日期。OCR提交结果不确定除外：`ERR_OCR_UNCERTAIN` 保留配额、不再提交；API拒绝取消这种不确定作业。已持久化供应商jobId的重试只恢复轮询和产物获取，最终失败仍退应用配额，不代表供应商退款。
 - **Worker进程丢失**：PostgreSQL执行锁随连接释放，Celery未确认消息按broker重投递规则恢复；恢复不是立即发生的时延保证。
 - **进度Redis不可用**：短超时降级，不让进度依赖无限阻塞转换。
 
@@ -163,6 +169,8 @@ docker compose logs --tail=100 api dispatcher worker
 - `miniprogram/project.config.json` 已配置本项目参赛 AppID；其他主体复用仓库时必须替换为自己的 AppID。联调期可在开发者工具勾选「不校验合法域名」。
 - 合并镜像以仓库根为构建 context（`deploy/cloudbase/Dockerfile`），根 `.dockerignore` 负责排除 `.venv`、`node_modules` 与 `.env` 等本地产物；`entrypoint.sh` 必须保持 LF 换行（仓库根 `.gitattributes` 已锁定），否则容器启动会报 `no such file or directory`。
 - 本地复现云托管拓扑：`docker compose -f deploy/cloudbase/docker-compose.cloudbase-ref.yml up --build`，api 在 `127.0.0.1:8112`。
+
+> **2026-10-09正式上线门禁：** 下节及旧CloudBase指南对应尚未改造的HTTP/共享目录实现，不是正式微信私有链路的发布许可。目标与待决项见[上线设计](docs/superpowers/specs/2026-09-15-wechat-cloudbase-launch-design.md)和[修订计划](docs/superpowers/plans/2026-09-15-wechat-cloudbase-launch.md)：callContainer+签名COS、托管PostgreSQL/Redis、CFS仅processor、独立迁移。当前005为OCR恢复；未来云存储接006，不能覆盖005或丢失其恢复证据。未完成改造与真实验收前，不据旧四服务步骤部署正式环境。上文当前Compose/005升级说明保持有效。
 
 ### 2. 上线域名（选定：微信云托管，免 ICP 备案）
 

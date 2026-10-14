@@ -12,7 +12,13 @@ from app.deps import get_optional_user
 from app.models import User
 from app.redis_client import redis_client
 from app.routers.quota import refund_task_quota
-from app.task_service import TaskType, create_task_record, load_task, valid_result_path
+from app.task_service import (
+    TaskType,
+    create_task_record,
+    has_unresolved_ocr_submission,
+    load_task,
+    valid_result_path,
+)
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -90,7 +96,7 @@ def get_task_status(task_id: uuid.UUID, current_user: User | None = Depends(get_
 def cancel_task(task_id: uuid.UUID, current_user: User | None = Depends(get_optional_user),
                 db: Session = Depends(get_db)):
     task, _ = load_task(db, task_id, current_user, lock=True)
-    if task.status != "waiting":
+    if task.status != "waiting" or has_unresolved_ocr_submission(task):
         raise HTTPException(status_code=409, detail="任务已开始处理或结束，无法取消")
     task.status = "failed"
     task.error_code = "ERR_CANCELLED"

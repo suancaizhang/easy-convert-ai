@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { Button, Text, View } from '@tarojs/components'
 import { deleteDocument, fetchHistory } from '../../api'
@@ -10,15 +10,33 @@ export default function History() {
   const [items, setItems] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(false)
 
-  const load = useCallback(() => {
+  const [total, setTotal] = useState(0)
+  const [nextPage, setNextPage] = useState(1)
+  const requestId = useRef(0)
+  const inFlight = useRef(false)
+
+  const load = useCallback(async (page = 1) => {
+    if (page !== 1 && inFlight.current) return
+    const id = ++requestId.current
+    inFlight.current = true
     setLoading(true)
-    fetchHistory(1, 50)
-      .then((r) => setItems(r.items))
-      .catch(() => Taro.showToast({ title: '加载失败', icon: 'none' }))
-      .finally(() => setLoading(false))
+    try {
+      const response = await fetchHistory(page, 50)
+      if (id !== requestId.current) return
+      setItems((current) => page === 1 ? response.items : [...current, ...response.items])
+      setTotal(response.total)
+      setNextPage(response.page + 1)
+    } catch {
+      if (id === requestId.current) Taro.showToast({ title: '加载失败', icon: 'none' })
+    } finally {
+      if (id === requestId.current) {
+        inFlight.current = false
+        setLoading(false)
+      }
+    }
   }, [])
 
-  useDidShow(load)
+  useDidShow(() => { void load() })
 
   const openItem = (it: HistoryItem) => {
     if (!it.task_id) {
@@ -77,6 +95,11 @@ export default function History() {
             )}
           </View>
         ))
+      )}
+      {items.length < total && (
+        <Button className='load-more' loading={loading} disabled={loading} onClick={() => load(nextPage)}>
+          加载更多（已显示 {items.length}/{total}）
+        </Button>
       )}
     </View>
   )

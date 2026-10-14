@@ -9,9 +9,7 @@ import { ImagePreview } from "./ImagePreview";
 import { DocxPreview } from "./DocxPreview";
 
 // PDF.js requires browser APIs; never evaluate it during server prerendering.
-const PdfPreview = dynamic(() => import("./PdfPreview").then((mod) => mod.PdfPreview), {
-  ssr: false,
-});
+const PdfPreview = dynamic(() => import("./PdfPreview").then((mod) => mod.PdfPreview), { ssr: false });
 
 interface FilePreviewProps {
   taskId: string;
@@ -20,98 +18,61 @@ interface FilePreviewProps {
   onClose: () => void;
 }
 
-/** 根据 taskType 确定结果文件的格式类型 */
-function getResultFormat(taskType: string): "pdf" | "image" | "docx" {
-  const pdfTypes = [
-    "word_to_pdf",
-    "excel_to_pdf",
-    "ppt_to_pdf",
-    "images_to_pdf",
-    "pdf_compress",
-    "pdf_merge",
-    "pdf_rotate",
-    "pdf_split",
-    "pdf_watermark",
-  ];
-  const docxTypes = ["pdf_to_word", "ocr_to_word"];
-
-  if (pdfTypes.includes(taskType)) return "pdf";
-  if (docxTypes.includes(taskType)) return "docx";
-  return "image"; // pdf_to_image
-}
-
-export function FilePreview({ taskId, taskType, open, onClose }: FilePreviewProps) {
+function ArtifactPreview({ taskId }: { taskId: string }) {
   const { t } = useI18n();
+  const [format, setFormat] = useState("");
   const [pdfFile, setPdfFile] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const format = getResultFormat(taskType);
-
-  // PDF 和 Docx 需要先加载 Blob
   useEffect(() => {
-    if (!open || !taskId) return;
-    if (format !== "pdf") return;
-
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-
-    fetchTaskFile(taskId, { preview: true })
-      .then((blob) => {
-        if (cancelled) return;
-        const url = URL.createObjectURL(blob as Blob);
-        setPdfFile(url);
+    const controller = new AbortController();
+    const { signal } = controller;
+    let objectUrl: string | undefined;
+    async function load() {
+      try {
+        const pages = await fetchTaskFile(taskId, { path: "/pages", json: true, signal }) as Record<string, unknown>;
+        if (signal.aborted) return;
+        const ext = String(pages.ext).replace(/^\./, "").toLowerCase();
+        if (!["pdf", "docx", "txt", "png", "jpg", "jpeg", "webp"].includes(ext)) throw new Error("Unsupported artifact format");
+        if (ext === "pdf" || ext === "txt") {
+          const blob = await fetchTaskFile(taskId, { preview: true, signal }) as Blob;
+          if (signal.aborted) return;
+          if (ext === "pdf") {
+            objectUrl = URL.createObjectURL(blob);
+            setPdfFile(objectUrl);
+          } else {
+            const content = await blob.text();
+            if (signal.aborted) return;
+            setText(content);
+          }
+        }
+        setFormat(ext);
         setLoading(false);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError(true);
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      if (pdfFile) {
-        URL.revokeObjectURL(pdfFile);
-        setPdfFile(null);
+      } catch {
+        if (!signal.aborted) { setError(true); setLoading(false); }
       }
+    }
+    void load();
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, taskId, format]);
+  }, [taskId]);
 
-  const renderContent = () => {
-    if (error) {
-      return (
-        <div className="flex items-center justify-center py-12 text-red-500 text-sm">
-          {t("preview.loadFailed")}
-        </div>
-      );
-    }
+  if (error) return <div role="alert" className="text-center py-12 text-error-fg text-sm">{t("preview.loadFailed")}</div>;
+  if (loading) return <div className="text-center py-12 text-muted text-sm">{t("preview.loading")}</div>;
+  if (format === "pdf" && pdfFile) return <PdfPreview file={pdfFile} />;
+  if (format === "docx") return <DocxPreview taskId={taskId} />;
+  if (format === "txt") return <pre className="p-4 whitespace-pre-wrap break-words text-sm">{text}</pre>;
+  return <ImagePreview taskId={taskId} />;
+}
 
-    switch (format) {
-      case "pdf":
-        if (loading || !pdfFile) {
-          return (
-            <div className="flex items-center justify-center py-12 text-muted text-sm">
-              {t("preview.loading")}
-            </div>
-          );
-        }
-        return <PdfPreview file={pdfFile} />;
-
-      case "image":
-        return <ImagePreview taskId={taskId} />;
-
-      case "docx":
-        return <DocxPreview taskId={taskId} />;
-    }
-  };
-
+export function FilePreview({ taskId, open, onClose }: FilePreviewProps) {
   return (
     <PreviewModal open={open} onClose={onClose}>
-      {renderContent()}
+      {open && taskId && <ArtifactPreview key={taskId} taskId={taskId} />}
     </PreviewModal>
   );
 }

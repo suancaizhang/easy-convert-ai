@@ -15,27 +15,36 @@ export function DocxPreview({ taskId }: DocxPreviewProps) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    const { signal } = controller;
+    setLoading(true);
+    setError(false);
 
     async function render() {
       try {
-        const blob = await fetchTaskFile(taskId, { preview: true }) as Blob;
+        const blob = await fetchTaskFile(taskId, { preview: true, signal }) as Blob;
         const arrayBuffer = await blob.arrayBuffer();
 
-        if (cancelled || !containerRef.current) return;
+        if (signal.aborted) return;
 
         // 动态 import docx-preview 避免 SSR 问题
         const { renderAsync } = await import("docx-preview");
-        await renderAsync(arrayBuffer, containerRef.current, undefined, {
+        if (signal.aborted) return;
+        // Render off-DOM so a late library completion cannot overwrite a new task.
+        const content = document.createElement("div");
+        await renderAsync(arrayBuffer, content, undefined, {
           className: "docx-preview-wrapper",
           inWrapper: true,
           ignoreWidth: false,
           ignoreHeight: false,
         });
 
-        if (!cancelled) setLoading(false);
+        if (!signal.aborted && containerRef.current) {
+          containerRef.current.replaceChildren(content);
+          setLoading(false);
+        }
       } catch {
-        if (!cancelled) {
+        if (!signal.aborted) {
           setError(true);
           setLoading(false);
         }
@@ -45,7 +54,7 @@ export function DocxPreview({ taskId }: DocxPreviewProps) {
     render();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [taskId]);
 

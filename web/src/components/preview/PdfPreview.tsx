@@ -6,8 +6,13 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { useI18n } from "@/lib/i18n";
 
-// pdf.js worker 配置 - 使用 CDN
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Bundle the matching worker on this origin; cross-origin workers require an
+// unreleased PDF.js wrapper Blob. React-PDF recommends this import form:
+// https://github.com/wojtekmaj/react-pdf/tree/v9.2.1#configure-pdfjs-worker
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString();
 
 interface PdfPreviewProps {
   /** PDF 文件的 Blob URL 或 ArrayBuffer */

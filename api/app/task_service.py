@@ -64,6 +64,18 @@ PARAMETER_MODELS = {
 }
 
 
+def has_unresolved_ocr_submission(task: Task) -> bool:
+    if task.task_type != "ocr_to_word":
+        return False
+    if task.error_code == "ERR_OCR_UNCERTAIN" or task.ocr_job_state in {"submitting", "uncertain"}:
+        return True
+    if task.ocr_job_state == "submitted":
+        return not task.ocr_job_id
+    if task.ocr_job_state == "rejected":
+        return task.ocr_job_id is not None
+    return task.ocr_job_state is not None or task.ocr_job_id is not None
+
+
 def create_task_record(db: Session, user: User | None, source_ids: list[uuid.UUID],
                        task_type: TaskType, params: dict | None, ocr_mode: str | None = None) -> Task:
     if task_type == "ocr_to_word" and user is None:

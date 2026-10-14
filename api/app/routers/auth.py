@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth import hash_password, verify_password, create_access_token
+from app.auth import hash_password, verify_password, create_access_token, validate_password_size
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import User
@@ -11,15 +13,25 @@ from app.wechat import code2openid
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+def password_within_bcrypt_limit(value: str) -> str:
+    try:
+        return validate_password_size(value)
+    except ValueError as exc:
+        # Default validation errors include the input; never echo a password.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+Password = Annotated[str, AfterValidator(password_within_bcrypt_limit)]
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: Password
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: Password
 
 
 class WechatLoginRequest(BaseModel):

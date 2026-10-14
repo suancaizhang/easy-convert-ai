@@ -10,7 +10,6 @@ import io
 import os
 import re
 import uuid
-import logging
 
 import httpx
 import fitz  # PyMuPDF
@@ -20,9 +19,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from PIL import Image
 
 from worker.converters import ConvertResult, DocumentConverter, OutputFormat
-from worker.services.paddle_vl import PaddleVLService, OcrPage
-
-logger = logging.getLogger(__name__)
+from worker.services.paddle_vl import PaddleVLService, OcrPage, OcrJobStore
 
 
 class OcrToWordConverter(DocumentConverter):
@@ -34,7 +31,8 @@ class OcrToWordConverter(DocumentConverter):
     def output_format(self) -> OutputFormat:
         return OutputFormat.DOCX
 
-    def convert(self, input_path: str, output_dir: str, params: dict | None = None) -> ConvertResult:
+    def convert(self, input_path: str, output_dir: str, params: dict | None = None,
+                *, job_store: OcrJobStore | None = None) -> ConvertResult:
         """执行 OCR 转换。
 
         Args:
@@ -51,11 +49,23 @@ class OcrToWordConverter(DocumentConverter):
 
         output_format = (params or {}).get("output_format", "docx")
 
-        service = PaddleVLService(token=token)
-        result = service.ocr_file(input_path)
+        if output_format not in {"docx", "txt", "searchable_pdf"}:
+            raise ValueError("Unsupported OCR output format")
+        if os.path.splitext(input_path)[1].lower() == ".pdf":
+            with fitz.open(input_path) as source:
+                source_pages = len(source)
+        else:
+            with Image.open(input_path) as source:
+                source_pages = getattr(source, "n_frames", 1)
+        if source_pages < 1:
+            raise ValueError("OCR source has no pages")
 
-        if not result.pages:
-            raise RuntimeError("OCR returned no results")
+        service = PaddleVLService(token=token)
+        result = service.ocr_file(input_path, job_store=job_store)
+        if len(result.pages) != source_pages or result.total_pages != source_pages:
+            raise RuntimeError("OCR page count does not match the source document")
+        if any(page.page_num != index for index, page in enumerate(result.pages, start=1)):
+            raise RuntimeError("OCR page order does not match the source document")
 
         if output_format == "txt":
             return self._build_txt(result, output_dir)
@@ -194,21 +204,18 @@ class OcrToWordConverter(DocumentConverter):
                 continue
 
             # 检查是否包含图片
-            img_match = re.search(r"!\[([^\]]*)\]\(([^)]+)\)", stripped)
-            if img_match:
-                img_ref = img_match.group(2)
-                self._insert_image(doc, img_ref, page.images, output_dir)
-                # 如果图片前后有文字，也写入
-                text_before = stripped[: img_match.start()].strip()
-                text_after = stripped[img_match.end() :].strip()
-                if text_before:
-                    p = doc.add_paragraph(text_before)
-                    for run in p.runs:
-                        run.font.size = Pt(11)
+            img_matches = list(re.finditer(r"!\[([^\]]*)\]\(([^)]+)\)", stripped))
+            if img_matches:
+                cursor = 0
+                for img_match in img_matches:
+                    text_before = stripped[cursor:img_match.start()].strip()
+                    if text_before:
+                        self._write_rich_text(doc.add_paragraph(), text_before)
+                    self._insert_image(doc, img_match.group(2), page.images, output_dir)
+                    cursor = img_match.end()
+                text_after = stripped[cursor:].strip()
                 if text_after:
-                    p = doc.add_paragraph(text_after)
-                    for run in p.runs:
-                        run.font.size = Pt(11)
+                    self._write_rich_text(doc.add_paragraph(), text_after)
                 continue
 
             # 普通段落
@@ -255,8 +262,7 @@ class OcrToWordConverter(DocumentConverter):
                     break
 
         if not download_url:
-            logger.warning(f"Image not found in results: {img_ref}")
-            return
+            raise RuntimeError("OCR result is missing a referenced image")
 
         try:
             resp = httpx.get(download_url, timeout=30)
@@ -272,5 +278,5 @@ class OcrToWordConverter(DocumentConverter):
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run = p.add_run()
             run.add_picture(img_path, width=Inches(5.5))
-        except Exception as e:
-            logger.warning(f"Failed to download/insert image {img_ref}: {e}")
+        except Exception:
+            raise RuntimeError("OCR image download or insertion failed") from None

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { useToolPage } from "@/lib/useToolPage";
 import { ToolPageLayout } from "@/components/ToolPageLayout";
 
@@ -10,6 +11,7 @@ const MAX_SIZE = 20 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
 
 export default function MergePage() {
+  const { t } = useI18n();
   const [files, setFiles] = useState<File[]>([]);
   const [localError, setLocalError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,11 +34,11 @@ export default function MergePage() {
     for (const f of incoming) {
       const ext = f.name.split(".").pop()?.toLowerCase() || "";
       if (!ALLOWED_TYPES.includes(f.type) && !["pdf", "png", "jpg", "jpeg", "webp"].includes(ext)) {
-        setLocalError("仅支持 PDF、PNG、JPG、WebP 格式");
+        setLocalError(t("pdf.merge.unsupported"));
         continue;
       }
       if (f.size > MAX_SIZE) {
-        setLocalError(`${f.name} 超过 20MB 限制`);
+        setLocalError(t("imagesToPdf.fileTooLarge", { name: f.name }));
         continue;
       }
       valid.push(f);
@@ -45,7 +47,7 @@ export default function MergePage() {
     setFiles((prev) => {
       const combined = [...prev, ...valid];
       if (combined.length > MAX_FILES) {
-        setLocalError(`最多 ${MAX_FILES} 个文件`);
+        setLocalError(t("pdf.merge.maxFiles", { max: MAX_FILES }));
         return combined.slice(0, MAX_FILES);
       }
       return combined;
@@ -55,7 +57,7 @@ export default function MergePage() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
-  }, []);
+  }, [t]);
 
   const handleRemove = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
@@ -73,7 +75,7 @@ export default function MergePage() {
 
   const handleStart = async () => {
     if (files.length < 2) {
-      setLocalError("至少需要 2 个文件");
+      setLocalError(t("pdf.merge.minFiles"));
       return;
     }
     setLocalError("");
@@ -89,20 +91,24 @@ export default function MergePage() {
 
   return (
     <ToolPageLayout
-      title="PDF 合并"
-      subtitle="合并多个 PDF 和图片为一个 PDF，可拖拽调整顺序"
+      title={t("taskType.pdfMerge")}
+      subtitle={t("pdf.merge.subtitle")}
       stage={tool.stage}
       uploadProgress={tool.uploadProgress}
+      conversionProgress={tool.conversionProgress}
+      progressDetail={tool.progressDetail}
+      canCancel={tool.canCancel}
+      onCancel={tool.cancel}
       taskStatus={tool.taskStatus}
       error={localError || tool.error}
       taskId={tool.taskId}
       taskType="pdf_merge"
       canPreview
       showPreview={tool.showPreview}
-      previewLabel="预览 PDF"
-      downloadLabel="下载 PDF"
-      convertingLabel="合并中，请稍候..."
-      doneLabel="合并完成！"
+      previewLabel={t("convert.previewPdf")}
+      downloadLabel={t("imagesToPdf.downloadPdf")}
+      convertingLabel={t("pdf.merge.busy")}
+      doneLabel={t("pdf.merge.done")}
       onDownload={tool.download}
       onPreview={tool.preview}
       onClosePreview={tool.closePreview}
@@ -125,18 +131,19 @@ export default function MergePage() {
             e.target.value = "";
           }}
         />
-        <p className="text-tertiary">点击或拖拽文件到此处</p>
-        <p className="text-xs text-muted mt-2">PDF、PNG、JPG、WebP，每个最大 20MB，最多 {MAX_FILES} 个</p>
+        <p className="text-tertiary">{t("convert.dropzone")}</p>
+        <p className="text-xs text-muted mt-2">{t("pdf.merge.hint", { max: MAX_FILES })}</p>
       </div>
 
       {files.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium">已选 {files.length} 个文件（拖拽排序）</p>
+          <p className="text-sm font-medium">{t("pdf.merge.selected", { count: files.length })}</p>
           {files.map((f, i) => (
             <div key={`${f.name}-${i}`} className="flex items-center gap-2 p-2 bg-page rounded-md text-sm">
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleMoveUp(i); }}
+                aria-label={t("pdf.merge.moveUp")}
                 disabled={i === 0}
                 className="text-muted hover:text-brand disabled:opacity-30"
               >
@@ -147,6 +154,7 @@ export default function MergePage() {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleRemove(i); }}
+                aria-label={t("convert.removeFile")}
                 className="text-muted hover:text-error-fg"
               >
                 ×
@@ -161,7 +169,7 @@ export default function MergePage() {
         disabled={files.length < 2}
         className="w-full bg-brand text-on-brand rounded-md py-3 font-medium hover:bg-brand-hover font-ui disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        开始合并（{files.length} 个文件）
+        {t("pdf.merge.start", { count: files.length })}
       </button>
     </ToolPageLayout>
   );

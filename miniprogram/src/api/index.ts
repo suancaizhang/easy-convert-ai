@@ -1,5 +1,5 @@
 import { API_BASE, request } from './client'
-import { getToken } from '../utils/storage'
+import { getToken, handleUnauthorized } from '../utils/storage'
 import { downloadFile, uploadFile } from '../utils/wechat'
 import { parseUploadResponse, uploadErrorMessage } from './upload-response'
 import type {
@@ -32,6 +32,7 @@ export async function uploadDocument(filePath: string): Promise<UploadResponse> 
   if (res.statusCode >= 200 && res.statusCode < 300) {
     return parseUploadResponse(res.data)
   }
+  handleUnauthorized(res.statusCode)
   throw new Error(uploadErrorMessage(res.data))
 }
 
